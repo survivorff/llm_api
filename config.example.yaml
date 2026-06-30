@@ -1,0 +1,59 @@
+# 复制为 config.yaml 使用。${VAR} 会从环境变量（含 .env）读取。
+# 留空 api_keys 的渠道会被自动禁用，所以你只需填你有 key 的那几个。
+
+server:
+  host: 0.0.0.0
+  port: 8080
+
+auth:
+  # 后台管理密钥（访问 /admin、创建朋友令牌）。给朋友用前务必设置。
+  admin_key: "${ADMIN_KEY}"
+  # 你自己常用的 key（owner，免配额）。朋友的 key 在后台动态创建，不写这里。
+  client_keys:
+    - "${GATEWAY_KEY}"
+
+logging:
+  db_path: usage.db
+
+channels:
+  # 国产直连：便宜、人民币付款、零支付摩擦，承担 80% 日常编码
+  - name: deepseek
+    base_url: https://api.deepseek.com/v1
+    api_keys:
+      - "${DEEPSEEK_API_KEY}"
+    models:
+      - deepseek-chat
+      - deepseek-reasoner
+
+  - name: qwen
+    base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
+    api_keys:
+      - "${QWEN_API_KEY}"
+    models:
+      - qwen-max
+      - qwen-plus
+
+  # OpenRouter：支持加密货币充值，绕开外卡；用来调 Claude/GPT 等外模型
+  # 这里用 model_map 把好记的短名映射到 OpenRouter 的真实 slug
+  - name: openrouter
+    base_url: https://openrouter.ai/api/v1
+    api_keys:
+      - "${OPENROUTER_API_KEY}"
+    headers:
+      HTTP-Referer: "https://github.com/survivorff/llm_api"
+      X-Title: "llm_api gateway"
+    models:
+      - "*"            # 兜底：未被其它渠道匹配的模型都走这里
+    model_map:
+      claude: "anthropic/claude-opus-4.8"
+      gpt: "openai/gpt-5.2"
+      gemini: "google/gemini-3-pro"
+
+  # 官方 OpenAI 直连（有外卡/官方 key 时启用）
+  - name: openai
+    base_url: https://api.openai.com/v1
+    api_keys:
+      - "${OPENAI_API_KEY}"
+    models:
+      - gpt-4o
+      - gpt-4o-mini
