@@ -39,6 +39,16 @@ class Settings(BaseSettings):
     channel_cooldown_seconds: float = 60.0  # 熔断后冷却时长，过后半开重试
     channel_health_interval: float = 30.0   # 后台巡检周期（秒）
 
+    # ---- 充值与支付 ----
+    # 支付渠道配置（JSON 字符串）。示例：
+    #   {"epay":{"api_url":"https://pay.x.com","pid":"1000","key":"xxx",
+    #            "notify_url":"https://host/pay/notify/epay"},
+    #    "crypto":{"address":"TXXXX","api_key":"trongrid-key"}}
+    payment_providers: str = "{}"
+    usd_cny_rate: float = 7.2          # 人民币→USD 换算（credits 以 USD 计价）
+    order_ttl_seconds: float = 1800.0  # 订单有效期（秒）
+    reconcile_interval: float = 30.0   # 对账 worker 轮询周期（秒）
+
     # ---- 旧配置兼容：首次启动可从 config.yaml 导入渠道 ----
     legacy_config_path: str | None = "config.yaml"
 
@@ -48,6 +58,14 @@ class Settings(BaseSettings):
     @property
     def is_sqlite(self) -> bool:
         return self.database_url.startswith("sqlite")
+
+    @property
+    def payment_config(self) -> dict:
+        import json
+        try:
+            return json.loads(self.payment_providers or "{}")
+        except Exception:
+            return {}
 
 
 @lru_cache

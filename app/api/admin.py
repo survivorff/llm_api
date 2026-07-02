@@ -10,7 +10,7 @@ from ..config import get_settings
 from ..core.security import encrypt_secret, new_token_key
 from ..core.state import AppServices
 from ..db.base import get_session
-from ..db.models import Channel, ModelPricing, Token, User
+from ..db.models import Channel, ModelPricing, Order, RedemptionCode, Token, User
 from .deps import get_services, require_admin
 
 router = APIRouter(prefix="/admin", dependencies=[Depends(require_admin)])
@@ -236,6 +236,45 @@ async def usage(session: AsyncSession = Depends(get_session), services: AppServi
     }
 
 
+# ---------------- orders & redemption (v1.2) ----------------
+@router.get("/orders")
+async def list_orders(session: AsyncSession = Depends(get_session), limit: int = 100):
+    rows = (
+        await session.execute(select(Order).order_by(Order.id.desc()).limit(limit))
+    ).scalars().all()
+    return {"orders": [_order_dict(o) for o in rows]}
+
+
+@router.get("/payment-methods")
+async def payment_methods(services: AppServices = Depends(get_services)):
+    """已启用的支付方式（供后台/前端展示）。"""
+    return {"methods": sorted(services.payments.keys())}
+
+
+@router.post("/redemption/generate")
+async def generate_redemption(session: AsyncSession = Depends(get_session),
+                              services: AppServices = Depends(get_services),
+                              payload: dict = Body(default={})):
+    amount = int(payload.get("amount_credits") or 0)
+    count = int(payload.get("count") or 1)
+    if amount <= 0 or count <= 0 or count > 1000:
+        raise HTTPException(status_code=400, detail="invalid amount or count (1-1000)")
+    codes = await services.orders.generate_codes(session, amount, count, payload.get("batch"))
+    return {"codes": codes, "amount_credits": amount, "count": len(codes)}
+
+
+@router.get("/redemption")
+async def list_redemption(session: AsyncSession = Depends(get_session), limit: int = 200):
+    rows = (
+        await session.execute(select(RedemptionCode).order_by(RedemptionCode.id.desc()).limit(limit))
+    ).scalars().all()
+    return {"codes": [
+        {"id": r.id, "code": r.code, "amount_credits": r.amount_credits, "batch": r.batch,
+         "status": r.status, "used_by": r.used_by, "used_at": r.used_at}
+        for r in rows
+    ]}
+
+
 # ---------------- serializers ----------------
 def _user_dict(u: User) -> dict:
     return {"id": u.id, "username": u.username, "email": u.email, "role": u.role,
@@ -261,6 +300,14 @@ def _pricing_dict(p: ModelPricing) -> dict:
     return {"id": p.id, "model": p.model, "group": p.group, "input_price": p.input_price,
             "output_price": p.output_price, "cache_price": p.cache_price,
             "multiplier": p.multiplier, "enabled": p.enabled}
+
+
+def _order_dict(o: Order) -> dict:
+    return {"id": o.id, "order_no": o.order_no, "user_id": o.user_id,
+            "amount_credits": o.amount_credits, "amount_money": o.amount_money,
+            "currency": o.currency, "method": o.method, "status": o.status,
+            "provider": o.provider, "provider_order": o.provider_order,
+            "created_at": o.created_at, "paid_at": o.paid_at, "expires_at": o.expires_at}
 
 
 # ---------------- helpers ----------------

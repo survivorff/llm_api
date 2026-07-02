@@ -1,6 +1,5 @@
 """FastAPI 应用入口：OpenAI 兼容的多用户 LLM 网关 + 计费 + 后台管理（v1 架构）。"""
 import asyncio
-import asyncio
 import contextlib
 import os
 
@@ -9,6 +8,7 @@ from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 
 from .api import admin as admin_api
+from .api import pay as pay_api
 from .api import v1 as v1_api
 from .bootstrap import bootstrap
 from .config import Settings, get_settings
@@ -36,14 +36,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if not settings.admin_key:
             print("⚠️  未配置 ADMIN_KEY：后台无鉴权，仅限本机开发！上线前务必设置。")
 
-        # 渠道健康巡检后台任务：定期尝试恢复被熔断的渠道
+        # 后台任务：渠道健康巡检 + 支付对账
         health_task = asyncio.create_task(_health_loop(app.state.services, settings))
+        reconcile_task = asyncio.create_task(_reconcile_loop(app.state.services, settings))
         try:
             yield
         finally:
-            health_task.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await health_task
+            for task in (health_task, reconcile_task):
+                task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await task
             await http.aclose()
             if redis:
                 await redis.aclose()
@@ -56,6 +58,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return {"status": "ok"}
 
     app.include_router(v1_api.router)
+    app.include_router(pay_api.router)
     app.include_router(admin_api.router)
 
     @app.get("/admin", response_class=HTMLResponse)
@@ -73,6 +76,37 @@ async def _health_loop(services: AppServices, settings: Settings) -> None:
         try:
             await asyncio.sleep(interval)
             await services.health.try_recover()
+        except asyncio.CancelledError:
+            break
+        except Exception:
+            continue
+
+
+async def _reconcile_loop(services: AppServices, settings: Settings) -> None:
+    """支付对账 worker：轮询 pending 订单主动查询 provider，并过期陈旧订单。
+
+    仅在有支付 provider 时运行；无 provider 直接退出。
+    """
+    if not services.payments:
+        return
+    interval = max(settings.reconcile_interval, 5.0)
+    from sqlalchemy import select
+
+    from .db.base import get_sessionmaker
+    from .db.models import Order
+    while True:
+        try:
+            await asyncio.sleep(interval)
+            async with get_sessionmaker()() as session:
+                await services.orders.expire_stale(session)
+                pend = (
+                    await session.execute(
+                        select(Order).where(Order.status == "pending").limit(50)
+                    )
+                ).scalars().all()
+                for order in pend:
+                    with contextlib.suppress(Exception):
+                        await services.orders.reconcile_one(session, order)
         except asyncio.CancelledError:
             break
         except Exception:

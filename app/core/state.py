@@ -5,9 +5,11 @@ from ..config import Settings
 from ..domain.auth import AuthService
 from ..domain.billing import BillingService
 from ..domain.health import HealthService
+from ..domain.orders import OrderService
 from ..domain.pricing import PricingService
 from ..domain.routing import Router
 from ..domain.usage import UsageService
+from ..payments import build_providers
 from .ratelimit import MemoryRateLimiter, RateLimiter, RedisRateLimiter
 
 
@@ -28,6 +30,9 @@ class AppServices:
         )
         # 健康状态变更后让路由缓存失效，避免熔断/恢复延迟
         self.health.on_change = self.router.invalidate
+        # 支付 provider（可插拔）+ 订单服务
+        self.payments = build_providers(settings.payment_config)
+        self.orders = OrderService(self.billing, self.payments, settings)
 
     @classmethod
     def build(cls, settings: Settings, http, redis) -> "AppServices":

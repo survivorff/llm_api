@@ -118,16 +118,36 @@ class Order(Base):
     __tablename__ = "orders"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    order_no: Mapped[str] = mapped_column(String(64), unique=True, index=True)  # 内部订单号
     user_id: Mapped[int] = mapped_column(Integer, index=True)
     amount_credits: Mapped[int] = mapped_column(BigInteger)
-    amount_money: Mapped[int] = mapped_column(BigInteger)   # 最小货币单位
+    amount_money: Mapped[int] = mapped_column(BigInteger)   # 最小货币单位（分/最小加密单位）
     currency: Mapped[str] = mapped_column(String(16), default="CNY")
     method: Mapped[str] = mapped_column(String(32))         # crypto/wechat/alipay/redemption
-    status: Mapped[str] = mapped_column(String(16), default="pending")
+    status: Mapped[str] = mapped_column(String(16), default="pending", index=True)  # pending/paid/expired/failed
     provider: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    provider_order: Mapped[str | None] = mapped_column(String(128), nullable=True)
-    created_at: Mapped[float] = mapped_column(Float, default=_now)
+    provider_order: Mapped[str | None] = mapped_column(String(128), nullable=True)  # 第三方订单号
+    pay_url: Mapped[str | None] = mapped_column(Text, nullable=True)        # 支付跳转/二维码内容
+    pay_address: Mapped[str | None] = mapped_column(String(128), nullable=True)  # 加密货币收款地址
+    extra: Mapped[str | None] = mapped_column(Text, nullable=True)          # JSON 附加信息
+    created_at: Mapped[float] = mapped_column(Float, default=_now, index=True)
+    expires_at: Mapped[float | None] = mapped_column(Float, nullable=True)  # 订单过期时间
     paid_at: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+
+class RedemptionCode(Base):
+    """兑换码：预生成的充值凭证，用户输入即充值 credits。"""
+
+    __tablename__ = "redemption_codes"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    code: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    amount_credits: Mapped[int] = mapped_column(BigInteger)
+    batch: Mapped[str | None] = mapped_column(String(64), nullable=True)  # 批次标记
+    status: Mapped[int] = mapped_column(Integer, default=1)  # 1可用/0已用/2作废
+    used_by: Mapped[int | None] = mapped_column(Integer, nullable=True)   # user_id
+    used_at: Mapped[float | None] = mapped_column(Float, nullable=True)
+    created_at: Mapped[float] = mapped_column(Float, default=_now)
 
 
 class Setting(Base):
