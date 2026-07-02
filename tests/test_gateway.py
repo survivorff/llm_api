@@ -1,4 +1,4 @@
-AUTH = {"Authorization": "Bearer TESTKEY"}
+AUTH = {"Authorization": "Bearer ADMINKEY"}
 
 
 def test_healthz(gateway):

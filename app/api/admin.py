@@ -1,0 +1,281 @@
+"""后台管理端点（需 ADMIN_KEY）：用户 / 令牌 / 渠道 / 定价 / 用量。"""
+import json
+import time
+
+from fastapi import APIRouter, Body, Depends, HTTPException
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from ..config import get_settings
+from ..core.security import encrypt_secret, new_token_key
+from ..core.state import AppServices
+from ..db.base import get_session
+from ..db.models import Channel, ModelPricing, Token, User
+from .deps import get_services, require_admin
+
+router = APIRouter(prefix="/admin", dependencies=[Depends(require_admin)])
+
+
+# ---------------- users ----------------
+@router.get("/users")
+async def list_users(session: AsyncSession = Depends(get_session)):
+    rows = (await session.execute(select(User).order_by(User.id))).scalars().all()
+    return {"users": [_user_dict(u) for u in rows]}
+
+
+@router.post("/users")
+async def create_user(session: AsyncSession = Depends(get_session), payload: dict = Body(default={})):
+    username = (payload.get("username") or "").strip()
+    if not username:
+        raise HTTPException(status_code=400, detail="username required")
+    exists = (await session.execute(select(User).where(User.username == username))).scalar_one_or_none()
+    if exists:
+        raise HTTPException(status_code=409, detail="username exists")
+    u = User(
+        username=username, email=payload.get("email"), role=payload.get("role", "user"),
+        group=payload.get("group", "default"), balance=int(payload.get("balance") or 0),
+    )
+    session.add(u)
+    await session.commit()
+    return _user_dict(u)
+
+
+@router.patch("/users/{uid}")
+async def update_user(uid: int, session: AsyncSession = Depends(get_session), payload: dict = Body(default={})):
+    u = (await session.execute(select(User).where(User.id == uid))).scalar_one_or_none()
+    if u is None:
+        raise HTTPException(status_code=404, detail="user not found")
+    for k in ("email", "role", "group", "status"):
+        if k in payload:
+            setattr(u, k, payload[k])
+    await session.commit()
+    return _user_dict(u)
+
+
+@router.post("/users/{uid}/topup")
+async def topup(uid: int, session: AsyncSession = Depends(get_session),
+                services: AppServices = Depends(get_services), payload: dict = Body(default={})):
+    amount = int(payload.get("amount") or 0)
+    if amount == 0:
+        raise HTTPException(status_code=400, detail="amount required")
+    u = await services.billing.topup(session, uid, amount, ref="admin-manual", type_="adjust")
+    if u is None:
+        raise HTTPException(status_code=404, detail="user not found")
+    return _user_dict(u)
+
+
+# ---------------- tokens ----------------
+@router.get("/tokens")
+async def list_tokens(session: AsyncSession = Depends(get_session)):
+    rows = (await session.execute(select(Token).order_by(Token.id))).scalars().all()
+    return {"tokens": [_token_dict(t) for t in rows]}
+
+
+@router.post("/tokens")
+async def create_token(session: AsyncSession = Depends(get_session), payload: dict = Body(default={})):
+    user_id = payload.get("user_id")
+    if not user_id:
+        # 无指定用户：绑定到第一个 admin 用户，方便快速创建
+        admin = (await session.execute(select(User).order_by(User.id))).scalars().first()
+        if admin is None:
+            raise HTTPException(status_code=400, detail="no user exists; create a user first")
+        user_id = admin.id
+    t = Token(
+        user_id=user_id, key=new_token_key(), name=(payload.get("name") or "friend").strip(),
+        quota_tokens=payload.get("quota_tokens"), note=payload.get("note"),
+        rpm_limit=payload.get("rpm_limit"),
+        allowed_models=_models_str(payload.get("allowed_models")),
+        allowed_groups=_models_str(payload.get("allowed_groups")),
+        expires_at=_expires(payload),
+    )
+    session.add(t)
+    await session.commit()
+    return _token_dict(t, reveal=True)
+
+
+@router.patch("/tokens/{tid}")
+async def update_token(tid: int, session: AsyncSession = Depends(get_session), payload: dict = Body(default={})):
+    t = (await session.execute(select(Token).where(Token.id == tid))).scalar_one_or_none()
+    if t is None:
+        raise HTTPException(status_code=404, detail="token not found")
+    for k in ("name", "note", "quota_tokens", "rpm_limit"):
+        if k in payload:
+            setattr(t, k, payload[k])
+    if "enabled" in payload:
+        t.enabled = 1 if payload["enabled"] else 0
+    if "allowed_models" in payload:
+        t.allowed_models = _models_str(payload["allowed_models"])
+    if "allowed_groups" in payload:
+        t.allowed_groups = _models_str(payload["allowed_groups"])
+    if "expires_at" in payload or "expires_in_days" in payload:
+        t.expires_at = _expires(payload)
+    await session.commit()
+    return _token_dict(t)
+
+
+@router.delete("/tokens/{tid}")
+async def delete_token(tid: int, session: AsyncSession = Depends(get_session)):
+    t = (await session.execute(select(Token).where(Token.id == tid))).scalar_one_or_none()
+    if t:
+        await session.delete(t)
+        await session.commit()
+    return {"deleted": tid}
+
+
+# ---------------- channels ----------------
+@router.get("/channels")
+async def list_channels(session: AsyncSession = Depends(get_session)):
+    rows = (await session.execute(select(Channel).order_by(Channel.id))).scalars().all()
+    return {"channels": [_channel_dict(c) for c in rows]}
+
+
+@router.post("/channels")
+async def create_channel(session: AsyncSession = Depends(get_session),
+                         services: AppServices = Depends(get_services), payload: dict = Body(default={})):
+    secret = get_settings().crypto_secret
+    keys = payload.get("api_keys") or []
+    enc = [encrypt_secret(str(k).strip(), secret) for k in keys if str(k).strip()]
+    c = Channel(
+        name=payload.get("name") or "channel", type=payload.get("type") or "openai",
+        base_url=(payload.get("base_url") or "").rstrip("/"),
+        api_keys=json.dumps(enc), models=json.dumps(payload.get("models") or []),
+        model_map=json.dumps(payload.get("model_map") or {}),
+        headers=json.dumps(payload.get("headers") or {}),
+        group=payload.get("group", "default"), weight=int(payload.get("weight") or 1),
+        priority=int(payload.get("priority") or 0),
+    )
+    session.add(c)
+    await session.commit()
+    services.router.invalidate()
+    return _channel_dict(c)
+
+
+@router.patch("/channels/{cid}")
+async def update_channel(cid: int, session: AsyncSession = Depends(get_session),
+                         services: AppServices = Depends(get_services), payload: dict = Body(default={})):
+    c = (await session.execute(select(Channel).where(Channel.id == cid))).scalar_one_or_none()
+    if c is None:
+        raise HTTPException(status_code=404, detail="channel not found")
+    secret = get_settings().crypto_secret
+    for k in ("name", "type", "group", "weight", "priority", "status"):
+        if k in payload:
+            setattr(c, k, payload[k])
+    if "base_url" in payload:
+        c.base_url = payload["base_url"].rstrip("/")
+    if "api_keys" in payload:
+        enc = [encrypt_secret(str(k).strip(), secret) for k in payload["api_keys"] if str(k).strip()]
+        c.api_keys = json.dumps(enc)
+    for k, col in (("models", "models"), ("model_map", "model_map"), ("headers", "headers")):
+        if k in payload:
+            setattr(c, col, json.dumps(payload[k]))
+    await session.commit()
+    services.router.invalidate()
+    return _channel_dict(c)
+
+
+@router.delete("/channels/{cid}")
+async def delete_channel(cid: int, session: AsyncSession = Depends(get_session),
+                         services: AppServices = Depends(get_services)):
+    c = (await session.execute(select(Channel).where(Channel.id == cid))).scalar_one_or_none()
+    if c:
+        await session.delete(c)
+        await session.commit()
+        services.router.invalidate()
+    return {"deleted": cid}
+
+
+# ---------------- pricing ----------------
+@router.get("/pricing")
+async def list_pricing(session: AsyncSession = Depends(get_session)):
+    rows = (await session.execute(select(ModelPricing).order_by(ModelPricing.id))).scalars().all()
+    return {"pricing": [_pricing_dict(p) for p in rows]}
+
+
+@router.post("/pricing")
+async def create_pricing(session: AsyncSession = Depends(get_session), payload: dict = Body(default={})):
+    p = ModelPricing(
+        model=payload["model"], group=payload.get("group", "default"),
+        input_price=int(payload.get("input_price") or 0),
+        output_price=int(payload.get("output_price") or 0),
+        cache_price=payload.get("cache_price"),
+        multiplier=float(payload.get("multiplier") or 1.0),
+    )
+    session.add(p)
+    await session.commit()
+    return _pricing_dict(p)
+
+
+@router.patch("/pricing/{pid}")
+async def update_pricing(pid: int, session: AsyncSession = Depends(get_session), payload: dict = Body(default={})):
+    p = (await session.execute(select(ModelPricing).where(ModelPricing.id == pid))).scalar_one_or_none()
+    if p is None:
+        raise HTTPException(status_code=404, detail="pricing not found")
+    for k in ("model", "group", "input_price", "output_price", "cache_price", "multiplier", "enabled"):
+        if k in payload:
+            setattr(p, k, payload[k])
+    await session.commit()
+    return _pricing_dict(p)
+
+
+@router.delete("/pricing/{pid}")
+async def delete_pricing(pid: int, session: AsyncSession = Depends(get_session)):
+    p = (await session.execute(select(ModelPricing).where(ModelPricing.id == pid))).scalar_one_or_none()
+    if p:
+        await session.delete(p)
+        await session.commit()
+    return {"deleted": pid}
+
+
+# ---------------- usage ----------------
+@router.get("/usage")
+async def usage(session: AsyncSession = Depends(get_session), services: AppServices = Depends(get_services)):
+    return {
+        "by_channel": await services.usage.summary_by_channel(session),
+        "by_token": await services.usage.summary_by_user(session),
+        "recent": await services.usage.recent(session, 100),
+    }
+
+
+# ---------------- serializers ----------------
+def _user_dict(u: User) -> dict:
+    return {"id": u.id, "username": u.username, "email": u.email, "role": u.role,
+            "group": u.group, "balance": u.balance, "frozen": u.frozen, "status": u.status}
+
+
+def _token_dict(t: Token, reveal: bool = False) -> dict:
+    return {"id": t.id, "user_id": t.user_id, "key": t.key, "name": t.name,
+            "enabled": t.enabled, "quota_tokens": t.quota_tokens, "used_tokens": t.used_tokens,
+            "rpm_limit": t.rpm_limit, "allowed_models": t.allowed_models,
+            "allowed_groups": t.allowed_groups, "expires_at": t.expires_at, "note": t.note}
+
+
+def _channel_dict(c: Channel) -> dict:
+    return {"id": c.id, "name": c.name, "type": c.type, "base_url": c.base_url,
+            "models": json.loads(c.models or "[]"), "model_map": json.loads(c.model_map or "{}"),
+            "headers": json.loads(c.headers or "{}"), "group": c.group, "weight": c.weight,
+            "priority": c.priority, "status": c.status, "fail_count": c.fail_count,
+            "key_count": len(json.loads(c.api_keys or "[]"))}
+
+
+def _pricing_dict(p: ModelPricing) -> dict:
+    return {"id": p.id, "model": p.model, "group": p.group, "input_price": p.input_price,
+            "output_price": p.output_price, "cache_price": p.cache_price,
+            "multiplier": p.multiplier, "enabled": p.enabled}
+
+
+# ---------------- helpers ----------------
+def _expires(payload: dict):
+    if payload.get("expires_at") is not None:
+        return payload["expires_at"]
+    days = payload.get("expires_in_days")
+    if days:
+        return time.time() + float(days) * 86400
+    return None
+
+
+def _models_str(val):
+    if isinstance(val, list):
+        return ",".join(str(m).strip() for m in val if str(m).strip()) or None
+    if isinstance(val, str):
+        return val.strip() or None
+    return None

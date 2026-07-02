@@ -1,18 +1,41 @@
+# 生产参考编排：app + postgres + redis。
+# 快速体验（仅 SQLite）可只跑 app 服务，注释掉 db/redis 与相关环境变量。
 services:
-  llm-api:
+  app:
     build: .
     container_name: llm-api
     ports:
       - "8080:8080"
     environment:
-      # 从宿主机 .env 注入密钥（docker compose 自动读取同目录 .env）
       ADMIN_KEY: ${ADMIN_KEY}
-      GATEWAY_KEY: ${GATEWAY_KEY}
-      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY}
-      QWEN_API_KEY: ${QWEN_API_KEY}
-      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
-      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      SESSION_SECRET: ${SESSION_SECRET}
+      CRYPTO_SECRET: ${CRYPTO_SECRET}
+      # 生产用 Postgres；如需 SQLite 单机，改为 sqlite+aiosqlite:////app/data/llm_api.db
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://llmapi:llmapi@db:5432/llmapi}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      LEGACY_CONFIG_PATH: ""
     volumes:
-      - ./config.yaml:/app/config.yaml:ro
       - ./data:/app/data
+    depends_on:
+      - db
+      - redis
     restart: unless-stopped
+
+  db:
+    image: postgres:16-alpine
+    container_name: llm-api-db
+    environment:
+      POSTGRES_USER: llmapi
+      POSTGRES_PASSWORD: llmapi
+      POSTGRES_DB: llmapi
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: llm-api-redis
+    restart: unless-stopped
+
+volumes:
+  pgdata:

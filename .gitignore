@@ -5,3 +5,5 @@ __pycache__/
 .env
 config.yaml
 .pytest_cache/
+data/
+usage.db

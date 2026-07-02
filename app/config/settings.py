@@ -1,0 +1,50 @@
+"""应用配置：环境变量 + .env（pydantic-settings）。
+
+生产用环境变量注入；本地开发有合理默认值，无需 Redis/Postgres 也能起。
+"""
+from functools import lru_cache
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+
+    # ---- 基础 ----
+    app_name: str = "llm_api gateway"
+    host: str = "127.0.0.1"
+    port: int = 8080
+    debug: bool = False
+
+    # ---- 数据库 ----
+    # 默认 SQLite（开发/单机）。生产设 DATABASE_URL 为 postgresql+asyncpg://...
+    database_url: str = "sqlite+aiosqlite:///./data/llm_api.db"
+
+    # ---- Redis（可选，缺省回退内存） ----
+    redis_url: str | None = None
+
+    # ---- 安全 ----
+    admin_key: str | None = None          # 后台管理密钥
+    session_secret: str = "dev-session-secret-change-me"
+    crypto_secret: str = "dev-crypto-secret-change-me-32byte"  # 上游 key 加密
+
+    # ---- 计费 ----
+    # 1 USD = 1_000_000 credits（微美元精度）
+    credits_per_usd: int = 1_000_000
+    # 预扣保守上限：无 max_tokens 时按此估算冻结
+    default_prefreeze_tokens: int = 8192
+
+    # ---- 旧配置兼容：首次启动可从 config.yaml 导入渠道 ----
+    legacy_config_path: str | None = "config.yaml"
+
+    # ---- HTTP 客户端是否信任系统代理（生产按需；本地测试常设 False 绕过本机代理）----
+    http_trust_env: bool = True
+
+    @property
+    def is_sqlite(self) -> bool:
+        return self.database_url.startswith("sqlite")
+
+
+@lru_cache
+def get_settings() -> Settings:
+    return Settings()
