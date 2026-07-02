@@ -2,7 +2,26 @@
 
 遵循语义化版本；每个版本对应一个可部署里程碑。
 
-## [1.0.0] - v1 架构基线（进行中）
+## [1.1.0] - 协议与渠道增强
+
+### 新增
+- 协议适配器层（`app/adapters`）：把上游各家协议统一成 OpenAI Chat 表示，新增上游只需实现一个适配器。
+  - `openai`：透传（DeepSeek/Qwen/Moonshot/OpenRouter 等）。
+  - `claude`：Anthropic Messages ⇄ OpenAI 互转（含流式）。
+  - `gemini`：Google Generative Language ⇄ OpenAI 互转（含流式）。
+- 新增端点：`/v1/embeddings`、`/v1/images/generations`、`/v1/messages`（Anthropic 原生入口）。
+- 渠道加权随机路由（按 weight 加权采样，priority 分层）。
+- 渠道健康巡检：连续失败自动熔断（status=2），冷却后台任务自动半开恢复。
+- 缓存命中计费：`prompt_tokens_details.cached_tokens` 按 `cache_price` 单独计价。
+
+### 变更
+- 转发层 `proxy` 重构为基于适配器的统一链路，支持多端点。
+- 路由缓存在渠道健康状态变更时自动失效。
+
+### 测试
+- 新增适配器互转、多端点、熔断恢复用例，共 32 个，全部通过。
+
+## [1.0.0] - v1 架构基线
 
 ### 架构
 - 重构为异步分层架构：`api → domain → db/core`，domain 层不依赖 FastAPI。

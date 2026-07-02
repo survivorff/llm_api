@@ -44,6 +44,20 @@ def _is_prefix(pattern: str, model: str) -> bool:
     return pattern.endswith("*") and pattern != "*" and model.startswith(pattern[:-1])
 
 
+def _weighted_shuffle(channels: list[dict]) -> list[dict]:
+    """按 weight 做加权随机排序：weight 越大越可能排在前面。
+
+    实现：对每个渠道取 key = random()^(1/weight)，降序排列（加权随机采样）。
+    """
+    scored = []
+    for c in channels:
+        w = max(c.get("weight", 1), 1)
+        r = random.random() or 1e-12
+        scored.append((r ** (1.0 / w), c))
+    scored.sort(key=lambda x: x[0], reverse=True)
+    return [c for _, c in scored]
+
+
 class Router:
     def __init__(self, cache_ttl: float = 10.0) -> None:
         self._rr: dict[int, int] = {}
@@ -101,11 +115,14 @@ class Router:
                 wildcard.append(c)
 
         def order(bucket):
-            # priority 升序，同 priority 内加权随机打散
-            bucket = sorted(bucket, key=lambda c: c["priority"])
-            random.shuffle(bucket)  # 简化的加权：先随机，后续可按 weight 精确加权
-            bucket.sort(key=lambda c: c["priority"])
-            return bucket
+            # priority 升序（小优先），同 priority 内按 weight 加权随机排序
+            groups: dict[int, list] = {}
+            for c in bucket:
+                groups.setdefault(c["priority"], []).append(c)
+            out = []
+            for prio in sorted(groups):
+                out.extend(_weighted_shuffle(groups[prio]))
+            return out
 
         chosen, seen = [], set()
         for c in order(exact) + order(prefix) + order(wildcard):

@@ -44,4 +44,54 @@ def build_mock_app() -> FastAPI:
             "usage": {"prompt_tokens": 5, "completion_tokens": 3, "total_tokens": 8},
         })
 
+    @app.post("/v1/embeddings")
+    async def embeddings(request: Request):
+        body = await request.json()
+        inp = body.get("input")
+        n = len(inp) if isinstance(inp, list) else 1
+        return JSONResponse(content={
+            "object": "list",
+            "data": [{"object": "embedding", "index": i, "embedding": [0.1, 0.2, 0.3]}
+                     for i in range(n)],
+            "model": body.get("model"),
+            "usage": {"prompt_tokens": 6, "total_tokens": 6},
+        })
+
+    # ---- Anthropic 原生 Messages ----
+    @app.post("/v1/messages")
+    async def anthropic_messages(request: Request):
+        body = await request.json()
+        model = body.get("model")
+        if body.get("stream"):
+            async def gen():
+                yield b'event: message_start\ndata: {"type":"message_start","message":{"usage":{"input_tokens":4}}}\n\n'
+                yield b'event: content_block_delta\ndata: {"type":"content_block_delta","delta":{"type":"text_delta","text":"Hi"}}\n\n'
+                yield b'event: message_delta\ndata: {"type":"message_delta","usage":{"output_tokens":2}}\n\n'
+                yield b'event: message_stop\ndata: {"type":"message_stop"}\n\n'
+            return StreamingResponse(gen(), media_type="text/event-stream")
+        return JSONResponse(content={
+            "id": "msg_mock",
+            "type": "message",
+            "role": "assistant",
+            "model": model,
+            "content": [{"type": "text", "text": f"claude-echo:{model}"}],
+            "stop_reason": "end_turn",
+            "usage": {"input_tokens": 5, "output_tokens": 3},
+        })
+
+    # ---- Gemini 原生 ----
+    @app.post("/v1beta/models/{model_verb:path}")
+    async def gemini(model_verb: str, request: Request):
+        body = await request.json()
+        model = model_verb.split(":")[0]
+        text = f"gemini-echo:{model}"
+        return JSONResponse(content={
+            "candidates": [{
+                "content": {"role": "model", "parts": [{"text": text}]},
+                "finishReason": "STOP",
+            }],
+            "usageMetadata": {"promptTokenCount": 5, "candidatesTokenCount": 3, "totalTokenCount": 8},
+            "modelVersion": model,
+        })
+
     return app

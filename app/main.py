@@ -1,4 +1,6 @@
 """FastAPI 应用入口：OpenAI 兼容的多用户 LLM 网关 + 计费 + 后台管理（v1 架构）。"""
+import asyncio
+import asyncio
 import contextlib
 import os
 
@@ -33,9 +35,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
         if not settings.admin_key:
             print("⚠️  未配置 ADMIN_KEY：后台无鉴权，仅限本机开发！上线前务必设置。")
+
+        # 渠道健康巡检后台任务：定期尝试恢复被熔断的渠道
+        health_task = asyncio.create_task(_health_loop(app.state.services, settings))
         try:
             yield
         finally:
+            health_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await health_task
             await http.aclose()
             if redis:
                 await redis.aclose()
@@ -56,6 +64,19 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return HTMLResponse(ADMIN_HTML)
 
     return app
+
+
+async def _health_loop(services: AppServices, settings: Settings) -> None:
+    """定期尝试恢复冷却期已过的熔断渠道。"""
+    interval = max(settings.channel_health_interval, 5.0)
+    while True:
+        try:
+            await asyncio.sleep(interval)
+            await services.health.try_recover()
+        except asyncio.CancelledError:
+            break
+        except Exception:
+            continue
 
 
 def app_factory() -> FastAPI:

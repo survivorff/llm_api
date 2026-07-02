@@ -32,14 +32,16 @@
 
 ---
 
-## v1.1 — 协议与渠道增强
+## v1.1 — 协议与渠道增强 ✅
 
-- [ ] Claude Messages `/v1/messages` 原生协议 ⇄ OpenAI 互转
-- [ ] Google Gemini 原生口 ⇄ OpenAI 互转
-- [ ] `/v1/embeddings`、`/v1/images/generations` 端点
-- [ ] 渠道分组 + 加权随机
-- [ ] 渠道健康巡检 + 连续失败自动熔断/恢复
-- [ ] 缓存命中计费（DeepSeek/Claude 等 cache 定价）
+- [x] Claude Messages `/v1/messages` 原生协议 ⇄ OpenAI 互转
+- [x] Google Gemini 原生口 ⇄ OpenAI 互转
+- [x] `/v1/embeddings`、`/v1/images/generations` 端点
+- [x] 渠道分组 + 加权随机
+- [x] 渠道健康巡检 + 连续失败自动熔断/恢复
+- [x] 缓存命中计费（DeepSeek/Claude 等 cache 定价）
+
+> 设计文档：`docs/design/v1.1-PROTOCOLS.md`
 
 ---
 

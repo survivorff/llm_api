@@ -4,6 +4,7 @@ import httpx
 from ..config import Settings
 from ..domain.auth import AuthService
 from ..domain.billing import BillingService
+from ..domain.health import HealthService
 from ..domain.pricing import PricingService
 from ..domain.routing import Router
 from ..domain.usage import UsageService
@@ -21,6 +22,12 @@ class AppServices:
         self.pricing = PricingService()
         self.usage = UsageService()
         self.router = Router()
+        self.health = HealthService(
+            fail_threshold=settings.channel_fail_threshold,
+            cooldown=settings.channel_cooldown_seconds,
+        )
+        # 健康状态变更后让路由缓存失效，避免熔断/恢复延迟
+        self.health.on_change = self.router.invalidate
 
     @classmethod
     def build(cls, settings: Settings, http, redis) -> "AppServices":

@@ -34,6 +34,11 @@ class Settings(BaseSettings):
     # 预扣保守上限：无 max_tokens 时按此估算冻结
     default_prefreeze_tokens: int = 8192
 
+    # ---- 渠道健康巡检（熔断/恢复）----
+    channel_fail_threshold: int = 5        # 连续失败达到即熔断
+    channel_cooldown_seconds: float = 60.0  # 熔断后冷却时长，过后半开重试
+    channel_health_interval: float = 30.0   # 后台巡检周期（秒）
+
     # ---- 旧配置兼容：首次启动可从 config.yaml 导入渠道 ----
     legacy_config_path: str | None = "config.yaml"
 
