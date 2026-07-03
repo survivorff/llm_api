@@ -168,3 +168,17 @@ class Setting(Base):
 
     key: Mapped[str] = mapped_column(String(64), primary_key=True)
     value: Mapped[str] = mapped_column(Text, default="")
+
+
+class AuditLog(Base):
+    """审计日志：管理操作与敏感事件留痕。"""
+
+    __tablename__ = "audit_logs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    ts: Mapped[float] = mapped_column(Float, default=_now, index=True)
+    actor: Mapped[str] = mapped_column(String(64), default="")     # admin / user:<id> / system
+    action: Mapped[str] = mapped_column(String(64), index=True)    # 如 user.create / channel.delete
+    target: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    detail: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON
+    ip: Mapped[str | None] = mapped_column(String(64), nullable=True)

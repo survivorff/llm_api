@@ -2,6 +2,24 @@
 
 遵循语义化版本；每个版本对应一个可部署里程碑。
 
+## [2.0.0] - v2.0 开源就绪与运营
+
+### 新增
+- 运营设置热更新：DB 支持的 KV 配置（公告/站点名/注册开关等），后台改无需重启（带缓存）。
+- 公开设置端点 `/public/settings`，供门户展示公告等。
+- Prometheus 指标 `/metrics`（零依赖内置采集器）：请求数/错误/token/延迟直方图，转发层统一埋点。
+- 审计日志：管理操作留痕 + `/admin/audit` 查询 + 保留策略后台清理任务。
+- 一键部署：Dockerfile（非 root + entrypoint 自动迁移）、compose 健康检查与依赖顺序。
+- CI：GitHub Actions（pytest + docker build）。
+- MIT License + 合规声明（`docs/design/COMPLIANCE.md`）。
+
+### 数据模型
+- 新增 `audit_logs` 表。
+- Alembic 迁移 `0002`：orders 扩展列 + redemption_codes + oauth_accounts + audit_logs。
+
+### 测试
+- 新增运营/指标/审计用例 8 个。累计 56 个全部通过。
+
 ## [1.3.0] - v1.3 用户体验与登录
 
 ### 新增

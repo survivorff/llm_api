@@ -13,12 +13,25 @@ services:
       # 生产用 Postgres；如需 SQLite 单机，改为 sqlite+aiosqlite:////app/data/llm_api.db
       DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://llmapi:llmapi@db:5432/llmapi}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      OAUTH_PROVIDERS: ${OAUTH_PROVIDERS:-{}}
+      PAYMENT_PROVIDERS: ${PAYMENT_PROVIDERS:-{}}
+      ALLOW_REGISTRATION: ${ALLOW_REGISTRATION:-true}
+      DEFAULT_LANGUAGE: ${DEFAULT_LANGUAGE:-zh}
+      METRICS_ENABLED: ${METRICS_ENABLED:-true}
       LEGACY_CONFIG_PATH: ""
     volumes:
       - ./data:/app/data
     depends_on:
-      - db
-      - redis
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8080/healthz').status==200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     restart: unless-stopped
 
   db:
@@ -30,6 +43,11 @@ services:
       POSTGRES_DB: llmapi
     volumes:
       - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U llmapi"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     restart: unless-stopped
 
   redis:

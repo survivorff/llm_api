@@ -59,6 +59,10 @@ class Settings(BaseSettings):
     oauth_providers: str = "{}"
     default_language: str = "zh"        # 默认界面语言 zh/en
 
+    # ---- 运营 / 可观测（v2.0）----
+    audit_retention_days: float = 90.0  # 审计日志保留天数，<=0 不清理
+    metrics_enabled: bool = True        # 是否暴露 /metrics
+
     # ---- 旧配置兼容：首次启动可从 config.yaml 导入渠道 ----
     legacy_config_path: str | None = "config.yaml"
 

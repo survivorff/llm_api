@@ -92,6 +92,9 @@ a{color:var(--primary2)}
   </div>
 </div>
 
+<!-- 公告 -->
+<div class="wrap" id="announceWrap" style="margin-bottom:0"></div>
+
 <!-- 主界面 -->
 <div id="appView" class="wrap hidden">
   <div class="stats">
@@ -230,6 +233,14 @@ async function loadProviders(){
   }catch(e){}
 }
 
+async function loadAnnouncement(){
+  try{const s=await fetch("/public/settings").then(r=>r.json());
+    const el=document.getElementById("announceWrap");
+    if(s && s.announcement){el.innerHTML=`<div class="msg ok">📢 ${s.announcement}</div>`;}
+    else{el.innerHTML="";}
+  }catch(e){}
+}
+
 function switchTab(name){
   document.querySelectorAll("#appView .tab").forEach(el=>el.classList.toggle("active",el.dataset.tab===name));
   ["tokens","topup","ledger"].forEach(n=>document.getElementById("tab-"+n).classList.toggle("hidden",n!==name));
@@ -290,6 +301,7 @@ async function loadLedger(){
 
 async function boot(){
   applyI18n();
+  loadAnnouncement();
   if(!session()){
     document.getElementById("authView").classList.remove("hidden");
     document.getElementById("appView").classList.add("hidden");

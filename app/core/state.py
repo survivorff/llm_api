@@ -3,6 +3,7 @@ import httpx
 
 from ..config import Settings
 from ..domain.accounts import AccountService
+from ..domain.audit import AuditService
 from ..domain.auth import AuthService
 from ..domain.billing import BillingService
 from ..domain.health import HealthService
@@ -10,6 +11,7 @@ from ..domain.oauth import build_oauth_providers
 from ..domain.orders import OrderService
 from ..domain.pricing import PricingService
 from ..domain.routing import Router
+from ..domain.settings_store import SettingsStore
 from ..domain.usage import UsageService
 from ..payments import build_providers
 from .ratelimit import MemoryRateLimiter, RateLimiter, RedisRateLimiter
@@ -41,6 +43,9 @@ class AppServices:
             allow_registration=settings.allow_registration,
         )
         self.oauth = build_oauth_providers(settings.oauth_config)
+        # 运营设置 / 审计（v2.0）
+        self.settings_store = SettingsStore()
+        self.audit = AuditService(retention_days=settings.audit_retention_days)
 
     @classmethod
     def build(cls, settings: Settings, http, redis) -> "AppServices":

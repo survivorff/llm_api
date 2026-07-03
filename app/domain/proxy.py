@@ -14,6 +14,7 @@ import httpx
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from ..adapters import get_adapter
+from ..core import metrics
 from ..db.base import get_sessionmaker
 
 RETRYABLE = {429, 500, 502, 503, 504, 529}
@@ -52,6 +53,19 @@ async def _finalize(ctx: ForwardContext, *, model, upstream_model, channel, stat
         cost = ctx.pricing.compute_cost(
             ctx.pricing_row, prompt or 0, completion or 0, cached or 0
         )
+
+    # Prometheus 指标
+    outcome = "ok" if status < 400 else "error"
+    metrics.inc_counter("llm_api_requests_total", endpoint=ctx.endpoint,
+                        model=model or "unknown", status=status, outcome=outcome)
+    if status >= 400:
+        metrics.inc_counter("llm_api_request_errors_total", endpoint=ctx.endpoint,
+                            status=status)
+    if total:
+        metrics.inc_counter("llm_api_tokens_total", float(total), model=model or "unknown")
+    if latency_ms:
+        metrics.observe_latency("llm_api_request_duration_seconds", latency_ms / 1000.0,
+                               endpoint=ctx.endpoint)
 
     async with get_sessionmaker()() as session:
         await ctx.usage.log(
