@@ -113,10 +113,10 @@ async def oauth_callback(provider: str, request: Request,
     except (OAuthError, AccountError) as e:
         detail = getattr(e, "detail", str(e))
         raise HTTPException(status_code=400, detail=detail)
-    # 重定向回后台并带会话；也可改成前端约定的地址
-    redirect = f"/admin?session={sess}"
+    # 重定向回用户门户并带会话（门户 JS 会把 query 里的 session 落地）
+    redirect = f"/portal?session={sess}"
     resp = RedirectResponse(url=redirect)
-    resp.set_cookie("session", sess, httponly=True, max_age=int(services.settings.session_ttl_seconds),
+    resp.set_cookie("session", sess, httponly=False, max_age=int(services.settings.session_ttl_seconds),
                     samesite="lax")
     return resp
 

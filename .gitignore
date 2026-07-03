@@ -3,6 +3,8 @@ __pycache__/
 *.pyc
 *.db
 .env
+deploy/.env
+SECRETS.md
 config.yaml
 .pytest_cache/
 data/

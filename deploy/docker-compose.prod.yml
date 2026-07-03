@@ -1,0 +1,77 @@
+# 生产编排：app + PostgreSQL + Redis + Caddy(自动 HTTPS)
+# 与本地 SQLite 版共用同一份 app 代码，仅 .env 不同，做到"本地验收=生产"。
+# 用法：在 deploy/ 目录放好 .env 后： docker compose -f docker-compose.prod.yml up -d --build
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: llm-api:latest
+    container_name: llm-api
+    env_file: .env
+    environment:
+      HOST: 0.0.0.0
+      PORT: 8080
+      DATABASE_URL: postgresql+asyncpg://llmapi:${POSTGRES_PASSWORD}@db:5432/llmapi
+      REDIS_URL: redis://redis:6379/0
+      LEGACY_CONFIG_PATH: ""
+      WEB_CONCURRENCY: ${WEB_CONCURRENCY:-2}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8080/healthz').status==200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+
+  db:
+    image: postgres:16-alpine
+    container_name: llm-api-db
+    environment:
+      POSTGRES_USER: llmapi
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: llmapi
+    # 1.6G 内存机器：限制 PG 内存占用
+    command: >
+      postgres -c shared_buffers=128MB -c max_connections=50
+      -c effective_cache_size=256MB -c work_mem=4MB
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U llmapi"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: llm-api-redis
+    command: redis-server --maxmemory 128mb --maxmemory-policy allkeys-lru
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: llm-api-caddy
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      SITE_DOMAIN: ${SITE_DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - app
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:

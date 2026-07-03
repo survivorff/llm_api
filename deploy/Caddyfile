@@ -1,0 +1,11 @@
+# Caddy 自动申请并续期 Let's Encrypt 证书。
+# {$SITE_DOMAIN} 来自环境变量（compose 注入）。
+{$SITE_DOMAIN} {
+	encode gzip
+
+	# 反向代理到 app 容器
+	reverse_proxy app:8080 {
+		# 流式（SSE）需要禁用缓冲
+		flush_interval -1
+	}
+}
