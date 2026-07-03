@@ -2,7 +2,7 @@
 import json
 import time
 
-from fastapi import APIRouter, Body, Depends, HTTPException
+from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -273,6 +273,81 @@ async def list_redemption(session: AsyncSession = Depends(get_session), limit: i
          "status": r.status, "used_by": r.used_by, "used_at": r.used_at}
         for r in rows
     ]}
+
+
+@router.post("/redemption/void")
+async def void_redemption(session: AsyncSession = Depends(get_session), payload: dict = Body(default={})):
+    """作废未使用的兑换码。支持按 id 或按 batch 批量作废。返回作废数量。"""
+    rid = payload.get("id")
+    batch = payload.get("batch")
+    if rid is None and not batch:
+        raise HTTPException(status_code=400, detail="id or batch required")
+    q = select(RedemptionCode).where(RedemptionCode.status == 1)
+    if rid is not None:
+        q = q.where(RedemptionCode.id == int(rid))
+    if batch:
+        q = q.where(RedemptionCode.batch == batch)
+    rows = (await session.execute(q)).scalars().all()
+    for r in rows:
+        r.status = 2  # 作废
+    await session.commit()
+    return {"voided": len(rows)}
+
+
+@router.get("/redemption/export")
+async def export_redemption(session: AsyncSession = Depends(get_session),
+                            batch: str | None = None, only_unused: int = 1):
+    """导出兑换码为 CSV 文本（code,amount_credits,batch,status）。"""
+    q = select(RedemptionCode).order_by(RedemptionCode.id.desc())
+    if batch:
+        q = q.where(RedemptionCode.batch == batch)
+    if only_unused:
+        q = q.where(RedemptionCode.status == 1)
+    rows = (await session.execute(q)).scalars().all()
+    lines = ["code,amount_credits,batch,status"]
+    for r in rows:
+        lines.append(f"{r.code},{r.amount_credits},{r.batch or ''},{r.status}")
+    from fastapi.responses import PlainTextResponse
+    return PlainTextResponse("\n".join(lines), media_type="text/csv")
+
+
+# ---------------- request logs (v2.2) ----------------
+@router.get("/logs")
+async def logs(session: AsyncSession = Depends(get_session),
+               services: AppServices = Depends(get_services),
+               limit: int = 50, offset: int = 0,
+               user_id: int | None = None, token_name: str | None = None,
+               model: str | None = None, channel: str | None = None,
+               status: int | None = None, only_errors: int = 0,
+               start: float | None = None, end: float | None = None):
+    limit = max(1, min(limit, 200))
+    return await services.usage.query_logs(
+        session, limit=limit, offset=max(0, offset), user_id=user_id,
+        token_name=token_name, model=model, channel=channel, status=status,
+        only_errors=bool(only_errors), start=start, end=end,
+    )
+
+
+@router.get("/logs/stats")
+async def logs_stats(session: AsyncSession = Depends(get_session),
+                     services: AppServices = Depends(get_services), days: int = 7):
+    return await services.usage.stats(session, days=max(1, min(days, 90)))
+
+
+# ---------------- orders manual (v2.2) ----------------
+@router.post("/orders/{order_no}/mark-paid")
+async def mark_order_paid(order_no: str, request: Request,
+                          session: AsyncSession = Depends(get_session),
+                          services: AppServices = Depends(get_services)):
+    """手动补单：将订单标记为已支付并幂等入账。"""
+    ok = await services.orders.mark_paid(session, order_no)
+    if not ok:
+        raise HTTPException(status_code=404, detail="order not found")
+    await services.audit.record(
+        session, actor="admin", action="order.mark_paid", target=order_no,
+        ip=request.client.host if request.client else None,
+    )
+    return {"ok": True, "order_no": order_no}
 
 
 # ---------------- serializers ----------------
