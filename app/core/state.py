@@ -41,6 +41,7 @@ class AppServices:
         self.accounts = AccountService(
             settings.session_secret, session_ttl=settings.session_ttl_seconds,
             allow_registration=settings.allow_registration,
+            email_auth_enabled=settings.email_auth_enabled,
         )
         self.oauth = build_oauth_providers(settings.oauth_config)
         # 运营设置 / 审计（v2.0）

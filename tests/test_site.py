@@ -65,3 +65,34 @@ def test_public_pricing_hides_disabled(gateway):
     r = gateway.get("/public/pricing")
     models = {p["model"] for p in r.json()["pricing"]}
     assert "secret-model" not in models
+
+
+def test_public_settings_exposes_base_and_email(gateway):
+    r = gateway.get("/public/settings")
+    assert r.status_code == 200
+    body = r.json()
+    assert "base_url" in body
+    assert "email_auth" in body
+
+
+def test_email_auth_disabled_by_default(monkeypatch, tmp_path, mock_upstream):
+    """默认关闭邮箱注册/登录：register/login 返回 403，仅 OAuth。"""
+    from app.config import Settings
+    from app.main import create_app
+    from fastapi.testclient import TestClient
+
+    db_file = tmp_path / "noemail.db"
+    settings = Settings(
+        admin_key="ADMINKEY",
+        database_url=f"sqlite+aiosqlite:///{db_file}",
+        crypto_secret="test-crypto-secret",
+        redis_url=None, legacy_config_path=None, http_trust_env=False,
+        # email_auth_enabled 默认 False
+    )
+    app = create_app(settings)
+    with TestClient(app) as client:
+        assert client.get("/auth/providers").json()["email"] is False
+        r = client.post("/auth/register", json={"email": "a@b.com", "password": "secret1"})
+        assert r.status_code == 403
+        r = client.post("/auth/login", json={"email": "a@b.com", "password": "secret1"})
+        assert r.status_code == 403

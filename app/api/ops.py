@@ -34,6 +34,8 @@ async def public_settings(session: AsyncSession = Depends(get_session),
     data = await services.settings_store.all(session)
     out = {k: data.get(k) for k in _PUBLIC_KEYS}
     out["default_language"] = services.settings.default_language
+    out["base_url"] = services.settings.public_base_url
+    out["email_auth"] = services.settings.email_auth_enabled
     return out
 
 

@@ -40,7 +40,7 @@ def _user_dict(u: User) -> dict:
 @router.get("/providers")
 async def providers(services: AppServices = Depends(get_services)):
     return {
-        "email": services.settings.allow_registration,
+        "email": services.settings.email_auth_enabled,
         "oauth": sorted(services.oauth.keys()),
         "default_language": services.settings.default_language,
     }

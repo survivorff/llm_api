@@ -94,8 +94,8 @@ def _body() -> str:
   </div>
   <div class="card" style="margin-top:30px;max-width:760px;margin-left:auto;margin-right:auto">
     <div class="muted" style="font-size:13px;margin-bottom:12px" data-i18n="code_title"></div>
-    <div class="code"><span class="c"># chat completions</span>
-curl https://llmapi.frankfu.cloud/v1/chat/completions \
+    <div class="code" data-base><span class="c"># chat completions</span>
+curl __BASE__/v1/chat/completions \
   -H <span class="s">"Authorization: Bearer sk-your-token"</span> \
   -H <span class="s">"Content-Type: application/json"</span> \
   -d <span class="s">'{"model":"deepseek-chat","messages":[{"role":"user","content":"Hello"}]}'</span></div>

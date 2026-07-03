@@ -69,21 +69,27 @@ PORTAL_HTML = r"""<!doctype html>
 <div id="authView" class="wrap">
   <div class="auth-box card">
     <div class="card-body">
-      <div class="tabs" style="margin-bottom:18px">
+      <div class="tabs" id="authTabs" style="margin-bottom:18px">
         <div class="tab active" id="tabLogin" onclick="switchAuth('login')" data-i18n="login">登录</div>
         <div class="tab" id="tabReg" onclick="switchAuth('register')" data-i18n="register">注册</div>
       </div>
       <div id="authMsg"></div>
-      <label data-i18n="email">邮箱</label>
-      <input id="email" type="email" placeholder="you@example.com"/>
-      <label data-i18n="password">密码</label>
-      <input id="password" type="password" placeholder="••••••"/>
-      <div id="regUsername" class="hidden">
-        <label data-i18n="username">用户名（可选）</label>
-        <input id="username" type="text"/>
+      <div id="oauthOnlyHint" class="hidden center" style="padding:8px 0 4px">
+        <div style="font-size:16px;font-weight:600;margin-bottom:6px" data-i18n="welcome">欢迎</div>
+        <div class="muted" data-i18n="oauthOnly">使用第三方账号一键登录</div>
       </div>
-      <div style="margin-top:18px">
-        <button class="btn primary" style="width:100%;justify-content:center" id="authSubmit" onclick="submitAuth()" data-i18n="login">登录</button>
+      <div id="emailAuthBox">
+        <label data-i18n="email">邮箱</label>
+        <input id="email" type="email" placeholder="you@example.com"/>
+        <label data-i18n="password">密码</label>
+        <input id="password" type="password" placeholder="••••••"/>
+        <div id="regUsername" class="hidden">
+          <label data-i18n="username">用户名（可选）</label>
+          <input id="username" type="text"/>
+        </div>
+        <div style="margin-top:18px">
+          <button class="btn primary" style="width:100%;justify-content:center" id="authSubmit" onclick="submitAuth()" data-i18n="login">登录</button>
+        </div>
       </div>
       <div id="oauthArea" class="oauth-btns"></div>
     </div>
@@ -153,12 +159,14 @@ const I18N = {
       username:"用户名（可选）",balance:"余额",frozen:"冻结中",tokens:"令牌",topup:"充值",ledger:"账单",
       create:"新建",used:"已用",redeem:"兑换",onlinePay:"在线充值",method:"支付方式",amount:"金额(元/USDT)",
       pay:"支付",type:"类型",balanceAfter:"余额",delete:"删除",copy:"复制",loginWith:"使用 %s 登录",
-      copied:"已复制",created:"创建成功",redeemOk:"兑换成功，到账 %s credits"},
+      copied:"已复制",created:"创建成功",redeemOk:"兑换成功，到账 %s credits",
+      welcome:"欢迎",oauthOnly:"使用第三方账号一键登录"},
   en:{title:"Console",backHome:"Home",login:"Login",register:"Register",logout:"Logout",email:"Email",password:"Password",
       username:"Username (optional)",balance:"Balance",frozen:"Frozen",tokens:"Tokens",topup:"Top up",ledger:"Ledger",
       create:"Create",used:"Used",redeem:"Redeem",onlinePay:"Online Payment",method:"Method",amount:"Amount",
       pay:"Pay",type:"Type",balanceAfter:"Balance",delete:"Delete",copy:"Copy",loginWith:"Sign in with %s",
-      copied:"Copied",created:"Created",redeemOk:"Redeemed %s credits"}
+      copied:"Copied",created:"Created",redeemOk:"Redeemed %s credits",
+      welcome:"Welcome",oauthOnly:"Sign in with a third-party account"}
 };
 let lang = localStorage.getItem("lang") || "zh";
 if(!I18N[lang]) lang="zh";
@@ -213,12 +221,13 @@ async function renderOAuth(){
   if(!providers) return;
   const area=document.getElementById("oauthArea");
   area.innerHTML="";
-  if((providers.oauth||[]).length){
+  // 仅当邮箱登录也开启时，才显示 "OAuth" 分隔线
+  if((providers.oauth||[]).length && providers.email){
     const div=document.createElement("div");div.className="divider";div.textContent="OAuth";area.appendChild(div);
   }
   (providers.oauth||[]).forEach(p=>{
     const b=document.createElement("button");
-    b.className="btn"; b.style.justifyContent="center"; b.textContent=t("loginWith").replace("%s",p);
+    b.className="btn primary"; b.style.justifyContent="center"; b.textContent=t("loginWith").replace("%s",p);
     b.onclick=async()=>{const d=await api("/auth/oauth/"+p);location.href=d.authorize_url;};
     area.appendChild(b);
   });
@@ -227,8 +236,20 @@ async function renderOAuth(){
 async function loadProviders(){
   try{providers=await fetch("/auth/providers").then(r=>r.json());
     if(providers.default_language && !localStorage.getItem("lang")){lang=providers.default_language;}
+    applyEmailAuth();
     renderOAuth();
   }catch(e){}
+}
+
+// 根据后端开关决定是否显示邮箱注册/登录表单
+function applyEmailAuth(){
+  const on = providers && providers.email;
+  const box = document.getElementById("emailAuthBox");
+  const tabs = document.getElementById("authTabs");
+  if(box) box.classList.toggle("hidden", !on);
+  if(tabs) tabs.classList.toggle("hidden", !on);
+  const hint=document.getElementById("oauthOnlyHint");
+  if(hint) hint.classList.toggle("hidden", !!on);
 }
 
 async function loadAnnouncement(){

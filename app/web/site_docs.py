@@ -87,7 +87,7 @@ def _body() -> str:
         <li data-i18n="step3"></li>
       </ol>
       <div class="muted" style="font-size:13px;margin:16px 0 6px" data-i18n="base_label"></div>
-      <div class="code" id="baseUrlBox">https://llmapi.frankfu.cloud/v1</div>
+      <div class="code" data-base id="baseUrlBox">__BASE__/v1</div>
     </section>
 
     <section id="auth" class="doc-sec">
@@ -117,16 +117,16 @@ def _body() -> str:
       <p data-i18n="p_clients"></p>
       <table style="margin:14px 0">
         <tbody>
-          <tr><td class="mono" style="width:120px" data-i18n="cl_field1"></td><td class="mono">https://llmapi.frankfu.cloud/v1</td></tr>
+          <tr><td class="mono" style="width:120px" data-i18n="cl_field1"></td><td class="mono" data-base>__BASE__/v1</td></tr>
           <tr><td class="mono" data-i18n="cl_field2"></td><td class="mono">sk-your-token</td></tr>
           <tr><td class="mono" data-i18n="cl_field3"></td><td class="mono">deepseek-chat</td></tr>
         </tbody>
       </table>
       <p class="muted" style="font-size:13px" data-i18n="cl_note"></p>
       <div class="muted" style="font-size:13px;margin:20px 0 8px" data-i18n="sdk_title"></div>
-      <div class="code"><span class="k">from</span> openai <span class="k">import</span> OpenAI
+      <div class="code" data-base><span class="k">from</span> openai <span class="k">import</span> OpenAI
 client = <span class="f">OpenAI</span>(
-    base_url=<span class="s">"https://llmapi.frankfu.cloud/v1"</span>,
+    base_url=<span class="s">"__BASE__/v1"</span>,
     api_key=<span class="s">"sk-your-token"</span>,
 )
 resp = client.chat.completions.<span class="f">create</span>(
@@ -139,7 +139,7 @@ resp = client.chat.completions.<span class="f">create</span>(
     <section id="stream" class="doc-sec">
       <h2 data-i18n="h_stream"></h2>
       <p data-i18n="p_stream"></p>
-      <div class="code">curl https://llmapi.frankfu.cloud/v1/chat/completions \
+      <div class="code" data-base>curl __BASE__/v1/chat/completions \
   -H <span class="s">"Authorization: Bearer sk-your-token"</span> \
   -d <span class="s">'{"model":"deepseek-chat","stream":true,"messages":[{"role":"user","content":"hi"}]}'</span></div>
     </section>

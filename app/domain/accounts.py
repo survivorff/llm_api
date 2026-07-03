@@ -25,14 +25,17 @@ class AccountError(Exception):
 
 class AccountService:
     def __init__(self, session_secret: str, session_ttl: float = 7 * 86400,
-                 allow_registration: bool = True):
+                 allow_registration: bool = True, email_auth_enabled: bool = False):
         self.secret = session_secret
         self.ttl = session_ttl
         self.allow_registration = allow_registration
+        self.email_auth_enabled = email_auth_enabled
 
     # ---------------- 注册 / 登录 ----------------
     async def register(self, session: AsyncSession, email: str, password: str,
                        username: str | None = None) -> tuple[User, str]:
+        if not self.email_auth_enabled:
+            raise AccountError(403, "email registration is disabled; please use OAuth login")
         email = (email or "").strip().lower()
         if not email or "@" not in email:
             raise AccountError(400, "valid email required")
@@ -66,6 +69,8 @@ class AccountService:
         return user, self._session_for(user)
 
     async def login(self, session: AsyncSession, email: str, password: str) -> tuple[User, str]:
+        if not self.email_auth_enabled:
+            raise AccountError(403, "email login is disabled; please use OAuth login")
         email = (email or "").strip().lower()
         user = (
             await session.execute(select(User).where(User.email == email))

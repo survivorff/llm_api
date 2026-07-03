@@ -174,7 +174,7 @@ def footer_html() -> str:
 
 
 def i18n_js(dict_json: str) -> str:
-    """i18n 运行时 + 语言切换 + 导航语言初始化。dict_json 为各页面合并后的词典 JSON。"""
+    """i18n 运行时 + 语言切换 + 动态站点域名注入。dict_json 为各页面合并后的词典 JSON。"""
     return """
 <script>
 window.Portal = (function(){
@@ -189,8 +189,19 @@ window.Portal = (function(){
     document.querySelectorAll('[data-i18n-ph]').forEach(el=>{ el.placeholder = t(el.getAttribute('data-i18n-ph')); });
   }
   function setLang(l){ lang=l; localStorage.setItem('lang',l); apply(); document.dispatchEvent(new CustomEvent('langchange',{detail:l})); }
-  document.addEventListener('DOMContentLoaded', apply);
-  return { t, setLang, apply, get lang(){return lang;} };
+  async function injectBase(){
+    let base='';
+    try{ const s=await fetch('/public/settings').then(r=>r.json()); base=(s&&s.base_url)||''; }catch(e){}
+    if(!base) base=location.origin;
+    const host=base.replace(/^https?:\\/\\//,'');
+    document.querySelectorAll('[data-base]').forEach(el=>{
+      el.innerHTML = el.innerHTML.split('__BASE__').join(base).split('__HOST__').join(host);
+    });
+    window.__BASE__=base;
+    document.dispatchEvent(new CustomEvent('baseready',{detail:base}));
+  }
+  document.addEventListener('DOMContentLoaded', function(){ apply(); injectBase(); });
+  return { t, setLang, apply, get lang(){return lang;}, get base(){return window.__BASE__||location.origin;} };
 })();
 </script>
 """ % dict_json

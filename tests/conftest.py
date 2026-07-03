@@ -62,6 +62,7 @@ def gateway(mock_upstream, tmp_path):
         redis_url=None,
         legacy_config_path=None,
         http_trust_env=False,
+        email_auth_enabled=True,
     )
     app = create_app(settings)
 

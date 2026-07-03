@@ -15,6 +15,8 @@ class Settings(BaseSettings):
     host: str = "127.0.0.1"
     port: int = 8080
     debug: bool = False
+    # 站点对外访问地址（用于文档示例、OAuth 提示等）。留空则前端用当前访问的 origin。
+    site_domain: str = ""
 
     # ---- 数据库 ----
     # 默认 SQLite（开发/单机）。生产设 DATABASE_URL 为 postgresql+asyncpg://...
@@ -50,7 +52,8 @@ class Settings(BaseSettings):
     reconcile_interval: float = 30.0   # 对账 worker 轮询周期（秒）
 
     # ---- 账户 / 登录（v1.3）----
-    allow_registration: bool = True    # 是否开放邮箱注册
+    allow_registration: bool = True    # 是否开放新用户注册（对邮箱与 OAuth 均生效）
+    email_auth_enabled: bool = False   # 邮箱密码注册/登录总开关（默认关，仅 OAuth）
     session_ttl_seconds: float = 604800.0  # 会话有效期（默认 7 天）
     # OAuth 配置（JSON 字符串）。示例：
     #   {"github":{"client_id":"...","client_secret":"...",
@@ -72,6 +75,16 @@ class Settings(BaseSettings):
     @property
     def is_sqlite(self) -> bool:
         return self.database_url.startswith("sqlite")
+
+    @property
+    def public_base_url(self) -> str:
+        """对外基础 URL。有 site_domain 用 https://<domain>，否则空串（前端回退当前 origin）。"""
+        d = (self.site_domain or "").strip().rstrip("/")
+        if not d:
+            return ""
+        if d.startswith("http://") or d.startswith("https://"):
+            return d
+        return f"https://{d}"
 
     @property
     def payment_config(self) -> dict:
