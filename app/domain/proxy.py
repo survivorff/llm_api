@@ -24,7 +24,7 @@ class ForwardContext:
     """封装一次转发所需的依赖与计费上下文。"""
 
     def __init__(self, http, router, billing, usage, pricing, principal,
-                 pricing_row, frozen_amount, endpoint="chat", health=None):
+                 pricing_row, frozen_amount, endpoint="chat", health=None, channels=None):
         self.http = http
         self.router = router
         self.billing = billing
@@ -35,6 +35,7 @@ class ForwardContext:
         self.frozen_amount = frozen_amount
         self.endpoint = endpoint
         self.health = health  # 渠道健康巡检服务（可选）
+        self.channels = channels  # 渠道账号池服务（可选，记 key 级统计）
 
 
 async def _finalize(ctx: ForwardContext, *, model, upstream_model, channel, status,
@@ -187,10 +188,18 @@ def _err_body(text: str, status: int) -> dict:
 
 
 async def _mark(ctx: ForwardContext, att, ok: bool) -> None:
-    """上报渠道健康状态（若巡检服务可用）。"""
-    if ctx.health is not None and getattr(att, "channel_id", None):
+    """上报渠道健康状态 + 单 key 统计（若服务可用）。"""
+    cid = getattr(att, "channel_id", None)
+    if ctx.health is not None and cid:
         try:
-            await ctx.health.report(att.channel_id, ok)
+            await ctx.health.report(cid, ok)
+        except Exception:
+            pass
+    fp = getattr(att, "key_fp", None)
+    if ctx.channels is not None and cid and fp:
+        try:
+            status = 200 if ok else 0
+            await ctx.channels.record_key_result(cid, fp, ok, status)
         except Exception:
             pass
 

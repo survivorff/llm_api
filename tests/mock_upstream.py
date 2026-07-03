@@ -12,6 +12,13 @@ def build_mock_app() -> FastAPI:
     async def healthz():
         return {"ok": True}
 
+    @app.get("/v1/models")
+    async def models():
+        return {"object": "list", "data": [
+            {"id": "deepseek-chat", "object": "model"},
+            {"id": "deepseek-reasoner", "object": "model"},
+        ]}
+
     @app.post("/v1/chat/completions")
     async def chat(request: Request):
         auth = request.headers.get("authorization", "")

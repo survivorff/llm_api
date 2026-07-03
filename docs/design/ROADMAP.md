@@ -110,6 +110,18 @@
 
 ---
 
+## v2.3 — 渠道与账号池增强 ✅
+
+- [x] API Key 池：单 key 用量/失败统计 + 启停（路由跳过禁用 key）
+- [x] 渠道连通性测试 + 测速
+- [x] 模型自动发现（上游 /models 一键导入）
+- [x] 用户分组聚合视图
+- [x] 上游 key 解密改用注入 secret（加固）
+
+> 设计文档：`docs/design/v2.3-CHANNELS.md`
+
+---
+
 ## 进阶储备（P2，按需）
 
 - Rerank（Cohere/Jina）、Midjourney、Suno 等特殊上游

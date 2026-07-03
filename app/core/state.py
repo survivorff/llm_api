@@ -6,6 +6,7 @@ from ..domain.accounts import AccountService
 from ..domain.audit import AuditService
 from ..domain.auth import AuthService
 from ..domain.billing import BillingService
+from ..domain.channels import ChannelService
 from ..domain.health import HealthService
 from ..domain.oauth import build_oauth_providers
 from ..domain.orders import OrderService
@@ -27,7 +28,7 @@ class AppServices:
         self.billing = BillingService()
         self.pricing = PricingService()
         self.usage = UsageService()
-        self.router = Router()
+        self.router = Router(crypto_secret=settings.crypto_secret)
         self.health = HealthService(
             fail_threshold=settings.channel_fail_threshold,
             cooldown=settings.channel_cooldown_seconds,
@@ -47,6 +48,8 @@ class AppServices:
         # 运营设置 / 审计（v2.0）
         self.settings_store = SettingsStore()
         self.audit = AuditService(retention_days=settings.audit_retention_days)
+        # 渠道账号池（v2.3）
+        self.channels = ChannelService(crypto_secret=settings.crypto_secret)
 
     @classmethod
     def build(cls, settings: Settings, http, redis) -> "AppServices":

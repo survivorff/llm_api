@@ -11,6 +11,11 @@ def new_token_key() -> str:
     return "sk-" + secrets.token_urlsafe(24)
 
 
+def key_fingerprint(plaintext_key: str) -> str:
+    """key 的短指纹（sha256 前 12 位），用于统计索引，不泄露明文。"""
+    return hashlib.sha256(plaintext_key.encode("utf-8")).hexdigest()[:12]
+
+
 def _prehash(password: str) -> bytes:
     """bcrypt 只取前 72 字节。先做 sha256 再 base64，规避长度上限且不丢熵。"""
     digest = hashlib.sha256(password.encode("utf-8")).digest()

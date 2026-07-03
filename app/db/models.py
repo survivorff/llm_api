@@ -56,6 +56,7 @@ class Channel(Base):
     type: Mapped[str] = mapped_column(String(32), default="openai")  # 决定适配器
     base_url: Mapped[str] = mapped_column(Text)
     api_keys: Mapped[str] = mapped_column(Text, default="[]")        # 加密后的 JSON 数组
+    key_meta: Mapped[str] = mapped_column(Text, default="{}")        # {key指纹: {disabled,ok,fail,...}}
     models: Mapped[str] = mapped_column(Text, default="[]")          # JSON 数组
     model_map: Mapped[str] = mapped_column(Text, default="{}")       # JSON 对象
     headers: Mapped[str] = mapped_column(Text, default="{}")         # JSON 对象

@@ -132,7 +132,7 @@ async def list_channels(session: AsyncSession = Depends(get_session)):
 @router.post("/channels")
 async def create_channel(session: AsyncSession = Depends(get_session),
                          services: AppServices = Depends(get_services), payload: dict = Body(default={})):
-    secret = get_settings().crypto_secret
+    secret = services.settings.crypto_secret
     keys = payload.get("api_keys") or []
     enc = [encrypt_secret(str(k).strip(), secret) for k in keys if str(k).strip()]
     c = Channel(
@@ -156,7 +156,7 @@ async def update_channel(cid: int, session: AsyncSession = Depends(get_session),
     c = (await session.execute(select(Channel).where(Channel.id == cid))).scalar_one_or_none()
     if c is None:
         raise HTTPException(status_code=404, detail="channel not found")
-    secret = get_settings().crypto_secret
+    secret = services.settings.crypto_secret
     for k in ("name", "type", "group", "weight", "priority", "status"):
         if k in payload:
             setattr(c, k, payload[k])
@@ -182,6 +182,56 @@ async def delete_channel(cid: int, session: AsyncSession = Depends(get_session),
         await session.commit()
         services.router.invalidate()
     return {"deleted": cid}
+
+
+# ---------------- channel account pool (v2.3) ----------------
+@router.get("/channels/{cid}/keys")
+async def channel_keys(cid: int, session: AsyncSession = Depends(get_session),
+                       services: AppServices = Depends(get_services)):
+    """渠道内 key 池的脱敏摘要（指纹/掩码/启停/统计）。"""
+    c = (await session.execute(select(Channel).where(Channel.id == cid))).scalar_one_or_none()
+    if c is None:
+        raise HTTPException(status_code=404, detail="channel not found")
+    return {"keys": services.channels.key_summaries(c)}
+
+
+@router.post("/channels/{cid}/keys/{fp}/toggle")
+async def toggle_channel_key(cid: int, fp: str, session: AsyncSession = Depends(get_session),
+                             services: AppServices = Depends(get_services), payload: dict = Body(default={})):
+    """启停渠道内的某个 key（按指纹）。"""
+    disabled = bool(payload.get("disabled"))
+    ok = await services.channels.set_key_disabled(session, cid, fp, disabled)
+    if not ok:
+        raise HTTPException(status_code=404, detail="channel not found")
+    services.router.invalidate()
+    return {"ok": True, "fp": fp, "disabled": disabled}
+
+
+@router.post("/channels/{cid}/test")
+async def test_channel(cid: int, request: Request, session: AsyncSession = Depends(get_session),
+                       services: AppServices = Depends(get_services), payload: dict = Body(default={})):
+    """连通性测试：发极小请求，返回每个 key 的 ok/延迟/错误。"""
+    res = await services.channels.test(
+        session, cid, services.http,
+        model=payload.get("model"), all_keys=bool(payload.get("all_keys")),
+    )
+    if "error" in res:
+        raise HTTPException(status_code=400, detail=res["error"])
+    await services.audit.record(
+        session, actor="admin", action="channel.test", target=str(cid),
+        ip=request.client.host if request.client else None,
+    )
+    return res
+
+
+@router.get("/channels/{cid}/discover-models")
+async def discover_models(cid: int, session: AsyncSession = Depends(get_session),
+                          services: AppServices = Depends(get_services)):
+    """从上游拉取可用模型列表（OpenAI 兼容渠道）。"""
+    res = await services.channels.discover_models(session, cid, services.http)
+    if "error" in res:
+        raise HTTPException(status_code=400, detail=res["error"])
+    return res
 
 
 # ---------------- pricing ----------------
@@ -234,6 +284,32 @@ async def usage(session: AsyncSession = Depends(get_session), services: AppServi
         "by_token": await services.usage.summary_by_user(session),
         "recent": await services.usage.recent(session, 100),
     }
+
+
+# ---------------- groups (v2.3) ----------------
+@router.get("/groups")
+async def list_groups(session: AsyncSession = Depends(get_session)):
+    """聚合用户分组与定价分组：每个分组的用户数、定价条数。"""
+    from sqlalchemy import func as _f
+    u_rows = (await session.execute(
+        select(User.group, _f.count()).group_by(User.group)
+    )).all()
+    p_rows = (await session.execute(
+        select(ModelPricing.group, _f.count()).group_by(ModelPricing.group)
+    )).all()
+    c_rows = (await session.execute(
+        select(Channel.group, _f.count()).group_by(Channel.group)
+    )).all()
+    groups: dict[str, dict] = {}
+    for g, n in u_rows:
+        groups.setdefault(g or "default", {})["users"] = n
+    for g, n in p_rows:
+        groups.setdefault(g or "default", {})["pricing"] = n
+    for g, n in c_rows:
+        groups.setdefault(g or "default", {})["channels"] = n
+    out = [{"group": g, "users": v.get("users", 0), "pricing": v.get("pricing", 0),
+            "channels": v.get("channels", 0)} for g, v in sorted(groups.items())]
+    return {"groups": out}
 
 
 # ---------------- orders & redemption (v1.2) ----------------

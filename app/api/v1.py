@@ -141,7 +141,7 @@ async def _prepare_and_forward(
         http=services.http, router=services.router, billing=services.billing,
         usage=services.usage, pricing=services.pricing, principal=principal,
         pricing_row=pricing_row, frozen_amount=frozen, endpoint=endpoint,
-        health=services.health,
+        health=services.health, channels=services.channels,
     )
     return await forward(ctx, attempts, payload, bool(payload.get("stream")))
 

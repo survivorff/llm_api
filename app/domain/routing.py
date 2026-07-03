@@ -15,7 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..config import get_settings
-from ..core.security import decrypt_secret
+from ..core.security import decrypt_secret, key_fingerprint as _fp
 from ..db.models import Channel
 
 
@@ -24,9 +24,9 @@ class NoChannelError(Exception):
 
 
 class Attempt:
-    __slots__ = ("channel", "channel_id", "type", "base_url", "upstream_model", "api_key", "headers")
+    __slots__ = ("channel", "channel_id", "type", "base_url", "upstream_model", "api_key", "headers", "key_fp")
 
-    def __init__(self, channel, channel_id, type_, base_url, upstream_model, api_key, headers):
+    def __init__(self, channel, channel_id, type_, base_url, upstream_model, api_key, headers, key_fp=None):
         self.channel = channel
         self.channel_id = channel_id
         self.type = type_
@@ -34,6 +34,7 @@ class Attempt:
         self.upstream_model = upstream_model
         self.api_key = api_key
         self.headers = headers or {}
+        self.key_fp = key_fp
 
     @property
     def url(self) -> str:
@@ -59,23 +60,35 @@ def _weighted_shuffle(channels: list[dict]) -> list[dict]:
 
 
 class Router:
-    def __init__(self, cache_ttl: float = 10.0) -> None:
+    def __init__(self, cache_ttl: float = 10.0, crypto_secret: str | None = None) -> None:
         self._rr: dict[int, int] = {}
         self._lock = threading.Lock()
         self._cache: list[dict] | None = None
         self._cache_ts = 0.0
         self._ttl = cache_ttl
+        self._crypto_secret = crypto_secret
 
     async def _channels(self, session: AsyncSession) -> list[dict]:
         now = time.time()
         if self._cache is not None and now - self._cache_ts < self._ttl:
             return self._cache
         rows = (await session.execute(select(Channel).where(Channel.status == 1))).scalars().all()
-        secret = get_settings().crypto_secret
+        secret = self._crypto_secret or get_settings().crypto_secret
         out = []
         for c in rows:
-            keys = [decrypt_secret(k, secret) for k in json.loads(c.api_keys or "[]")]
-            keys = [k for k in keys if k]
+            try:
+                meta = json.loads(c.key_meta or "{}")
+            except Exception:
+                meta = {}
+            keys = []
+            for enc in json.loads(c.api_keys or "[]"):
+                k = decrypt_secret(enc, secret)
+                if not k:
+                    continue
+                fp = _fp(k)
+                if meta.get(fp, {}).get("disabled"):
+                    continue  # 跳过被禁用的 key
+                keys.append((k, fp))
             if not keys:
                 continue
             out.append({
@@ -138,9 +151,9 @@ class Router:
             start = self._next_key_index(c["id"], n)
             upstream = c["model_map"].get(model, model)
             for j in range(n):
-                key = c["api_keys"][(start + j) % n]
+                key, fp = c["api_keys"][(start + j) % n]
                 attempts.append(
-                    Attempt(c["name"], c["id"], c["type"], c["base_url"], upstream, key, c["headers"])
+                    Attempt(c["name"], c["id"], c["type"], c["base_url"], upstream, key, c["headers"], fp)
                 )
         return attempts
 

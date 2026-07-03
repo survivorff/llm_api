@@ -278,6 +278,7 @@ function renderChannels(){
       <td class="mono" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${(c.models||[]).join(', ')}">${(c.models||[]).join(', ')}</td>
       <td class="mono">${c.weight}</td><td class="mono">${c.fail_count||0}</td><td>${st}</td>
       <td style="text-align:right;white-space:nowrap">
+        <button class="btn sm" onclick="openChannelDetail(${c.id})">账号池</button>
         <button class="btn sm" onclick="toggleChannel(${c.id},${c.status===1?0:1})">${c.status===1?'停用':'启用'}</button>
         <button class="btn sm" onclick='openChannelModal(${JSON.stringify(c)})'>编辑</button>
         <button class="btn sm danger" onclick="delChannel(${c.id})">删除</button></td>`;
@@ -468,6 +469,51 @@ async function submitChannel(id){
 }
 async function toggleChannel(id,st){await api('/admin/channels/'+id,{method:'PATCH',body:JSON.stringify({status:st})});toast('已更新','ok');loadAll();}
 async function delChannel(id){if(confirm('确认删除此渠道？')){await api('/admin/channels/'+id,{method:'DELETE'});toast('已删除','ok');loadAll();}}
+
+/* ---- 渠道账号池详情（v2.3）---- */
+let CUR_CHANNEL=null;
+async function openChannelDetail(cid){
+  CUR_CHANNEL=cid;
+  $('#modalBox').innerHTML=`<h3>渠道账号池 #${cid}</h3>
+    <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+      <button class="btn sm primary" onclick="testChannel(false)">测试首个 key</button>
+      <button class="btn sm" onclick="testChannel(true)">测试全部 key</button>
+      <button class="btn sm" onclick="discoverModels()">发现模型</button>
+    </div>
+    <div id="chTestMsg"></div>
+    <div id="chKeys"><div class="empty">加载中…</div></div>
+    <div class="modal-actions"><button class="btn ghost" onclick="closeModal()">关闭</button></div>`;
+  $('#modal').classList.remove('hidden');
+  loadChannelKeys();
+}
+async function loadChannelKeys(){
+  try{const d=await api('/admin/channels/'+CUR_CHANNEL+'/keys');
+    const box=$('#chKeys');
+    if(!d.keys.length){box.innerHTML='<div class="empty">该渠道无 key</div>';return;}
+    box.innerHTML='<table><thead><tr><th>Key</th><th>成功</th><th>失败</th><th>最近状态</th><th>状态</th><th></th></tr></thead><tbody>'+
+      d.keys.map(k=>`<tr><td class="mono">${k.masked}</td><td class="mono">${k.ok}</td><td class="mono">${k.fail}</td>
+        <td class="mono">${k.last_status==null?'-':k.last_status}</td>
+        <td>${k.disabled?'<span class="badge off">停用</span>':'<span class="badge on">启用</span>'}</td>
+        <td><button class="btn sm" onclick="toggleKey('${k.fp}',${k.disabled?0:1})">${k.disabled?'启用':'停用'}</button></td></tr>`).join('')+
+      '</tbody></table>';
+  }catch(e){}
+}
+async function toggleKey(fp,dis){await api('/admin/channels/'+CUR_CHANNEL+'/keys/'+fp+'/toggle',{method:'POST',body:JSON.stringify({disabled:!!dis})});toast('已更新','ok');loadChannelKeys();loadAll();}
+async function testChannel(all){
+  $('#chTestMsg').innerHTML='<div class="msg">测试中…</div>';
+  try{const d=await api('/admin/channels/'+CUR_CHANNEL+'/test',{method:'POST',body:JSON.stringify({all_keys:all})});
+    const rows=d.results.map(r=>`<div class="msg ${r.ok?'ok':'err'}">${r.masked} · ${r.ok?'OK':'FAIL'} · ${r.status} · ${r.latency_ms}ms ${r.error?('· '+r.error.slice(0,60)):''}</div>`).join('');
+    $('#chTestMsg').innerHTML=`<div style="margin-bottom:8px;color:var(--muted);font-size:12px">模型 ${d.model}</div>${rows}`;
+    loadChannelKeys();
+  }catch(e){$('#chTestMsg').innerHTML=`<div class="msg err">测试失败：${e.message||e}</div>`;}
+}
+async function discoverModels(){
+  $('#chTestMsg').innerHTML='<div class="msg">拉取中…</div>';
+  try{const d=await api('/admin/channels/'+CUR_CHANNEL+'/discover-models');
+    $('#chTestMsg').innerHTML=`<div class="msg ok">上游 ${d.models.length} 个模型（可复制到渠道编辑的模型框）：</div>
+      <textarea class="mono" style="width:100%;min-height:90px;background:var(--panel2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:8px">${d.models.join('\n')}</textarea>`;
+  }catch(e){$('#chTestMsg').innerHTML=`<div class="msg err">${e.message||e}</div>`;}
+}
 
 /* ---- pricing modal ---- */
 function openPricingModal(p){
