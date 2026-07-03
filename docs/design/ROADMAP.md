@@ -83,6 +83,19 @@
 
 ---
 
+## v2.1 — 门户网站与 UI 重设计 ✅
+
+- [x] 现代化门户首页 `/`（Hero + 特性 + 三步上手 + CTA）
+- [x] 文档中心 `/docs`（快速开始/认证/API/客户端/流式/错误码/FAQ）
+- [x] 套餐价格 `/pricing`（实时价目表 + ¥/$ 切换）
+- [x] 统一设计系统（深色 SaaS 风，响应式，中英双语）
+- [x] 公开只读端点 `/public/models`、`/public/pricing`
+- [x] 用户控制台 `/portal` 视觉重构
+
+> 设计文档：`docs/design/v2.1-PORTAL.md`
+
+---
+
 ## 进阶储备（P2，按需）
 
 - Rerank（Cohere/Jina）、Midjourney、Suno 等特殊上游

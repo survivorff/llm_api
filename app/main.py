@@ -19,6 +19,9 @@ from .core.state import AppServices
 from .db.base import dispose_engine, init_engine
 from .web.admin_ui import ADMIN_HTML
 from .web.portal_ui import PORTAL_HTML
+from .web.site_docs import docs_html
+from .web.site_home import home_html
+from .web.site_pricing import pricing_html
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -55,7 +58,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 await redis.aclose()
             await dispose_engine()
 
-    app = FastAPI(title=settings.app_name, lifespan=lifespan)
+    app = FastAPI(title=settings.app_name, lifespan=lifespan,
+                  docs_url=None, redoc_url=None, openapi_url=None)
 
     @app.get("/healthz")
     async def healthz():
@@ -74,6 +78,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return HTMLResponse(ADMIN_HTML)
 
     @app.get("/", response_class=HTMLResponse)
+    async def home_page():
+        return HTMLResponse(home_html())
+
+    @app.get("/docs", response_class=HTMLResponse)
+    async def docs_page():
+        return HTMLResponse(docs_html())
+
+    @app.get("/pricing", response_class=HTMLResponse)
+    async def pricing_page():
+        return HTMLResponse(pricing_html())
+
     @app.get("/portal", response_class=HTMLResponse)
     async def portal_ui():
         return HTMLResponse(PORTAL_HTML)

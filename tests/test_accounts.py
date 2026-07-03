@@ -128,6 +128,9 @@ def test_providers_listing(gateway):
 def test_portal_served(gateway):
     r = gateway.get("/portal")
     assert r.status_code == 200
-    assert "用户中心" in r.text or "User Center" in r.text
-    # 根路径也是门户
-    assert gateway.get("/").status_code == 200
+    # 控制台含登录入口
+    assert "authView" in r.text
+    # 根路径是门户首页（landing）
+    home = gateway.get("/")
+    assert home.status_code == 200
+    assert "hero" in home.text

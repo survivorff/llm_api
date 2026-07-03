@@ -1,77 +1,75 @@
-"""用户自助门户（单文件前端，调用 /auth/* 与 /pay/*）。
+"""用户自助控制台（登录后仪表盘）。调用 /auth/* 与 /pay/*。
 
-功能：邮箱注册/登录、OAuth 登录、用量与余额仪表盘、令牌自助管理、
+功能：邮箱注册/登录、OAuth 登录、余额/用量仪表盘、令牌自助管理、
 充值（兑换码 + 在线支付）、账单明细。支持中/英双语。
+视觉沿用门户设计系统（shared.base_css）。
 """
+from .shared import base_css
+
+
+def _portal_css() -> str:
+    return base_css() + r"""
+/* 控制台专属 */
+.topbar{display:flex;align-items:center;justify-content:space-between;height:62px;padding:0 24px;
+  background:rgba(11,13,19,.9);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:50}
+.top-actions{display:flex;gap:10px;align-items:center}
+.wrap{max-width:1000px;margin:28px auto;padding:0 20px}
+.btn.danger{color:#fda4af;border-color:#4c2230;background:transparent}
+.btn.danger:hover{background:#3a1620;border-color:#4c2230}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:24px}
+.stat{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:20px 22px}
+.stat .label{color:var(--muted);font-size:12px;margin-bottom:8px;text-transform:uppercase;letter-spacing:.05em}
+.stat .value{font-size:28px;font-weight:700}
+.stat .value.grad{background:var(--grad);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+.tabs{display:flex;gap:4px;margin-bottom:18px;border-bottom:1px solid var(--border);flex-wrap:wrap}
+.tab{padding:11px 18px;cursor:pointer;color:var(--muted);border-bottom:2px solid transparent;font-weight:500}
+.tab:hover{color:var(--text)}
+.tab.active{color:var(--text);border-bottom-color:var(--primary)}
+.card{overflow:hidden;margin-bottom:18px;padding:0}
+.card-head{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border)}
+.card-head h3{margin:0;font-size:15px}
+.card-body{padding:18px 20px}
+input,select{background:var(--panel2);border:1px solid var(--border);color:var(--text);padding:10px 13px;border-radius:9px;font-size:14px;width:100%}
+input:focus,select:focus{outline:none;border-color:var(--primary)}
+label{display:block;color:var(--muted);font-size:12px;margin:10px 0 5px}
+.row{display:flex;gap:12px;flex-wrap:wrap}
+.row>div{flex:1;min-width:170px}
+.auth-box{max-width:410px;margin:56px auto}
+.oauth-btns{display:flex;flex-direction:column;gap:9px;margin-top:14px}
+.divider{display:flex;align-items:center;gap:12px;color:var(--dim);font-size:12px;margin:18px 0}
+.divider::before,.divider::after{content:"";flex:1;height:1px;background:var(--border)}
+.keycell{display:flex;align-items:center;gap:8px}
+"""
+
 
 PORTAL_HTML = r"""<!doctype html>
 <html lang="zh">
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>llm_api · 用户中心</title>
-<style>
-:root{--bg:#0f1117;--panel:#181b24;--panel2:#1f2330;--border:#2a2f3d;--text:#e6e8ee;
---muted:#9aa3b2;--primary:#6366f1;--primary2:#818cf8;--green:#22c55e;--red:#ef4444;--amber:#f59e0b;--cyan:#22d3ee;}
-*{box-sizing:border-box}
-body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,"PingFang SC",sans-serif;background:var(--bg);color:var(--text);font-size:14px}
-.hidden{display:none!important}
-.topbar{display:flex;align-items:center;justify-content:space-between;padding:14px 24px;background:linear-gradient(90deg,#1a1d27,#181b24);border-bottom:1px solid var(--border)}
-.brand{display:flex;align-items:center;gap:10px;font-weight:600;font-size:16px}
-.logo{width:28px;height:28px;border-radius:8px;background:linear-gradient(135deg,var(--primary),var(--cyan));display:flex;align-items:center;justify-content:center}
-.top-actions{display:flex;gap:8px;align-items:center}
-.wrap{max-width:960px;margin:24px auto;padding:0 20px}
-.btn{border:1px solid var(--border);background:var(--panel2);color:var(--text);padding:8px 14px;border-radius:8px;cursor:pointer;font-size:13px;transition:.15s}
-.btn:hover{border-color:var(--primary);background:#262b3a}
-.btn.primary{background:linear-gradient(135deg,var(--primary),var(--primary2));border:none;color:#fff;font-weight:600}
-.btn.sm{padding:5px 10px;font-size:12px}
-.btn.danger{color:#fda4af;border-color:#4c2230}
-.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:22px}
-.stat{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:16px 18px}
-.stat .label{color:var(--muted);font-size:12px;margin-bottom:6px}
-.stat .value{font-size:24px;font-weight:700}
-.tabs{display:flex;gap:6px;margin-bottom:14px;border-bottom:1px solid var(--border);flex-wrap:wrap}
-.tab{padding:10px 16px;cursor:pointer;color:var(--muted);border-bottom:2px solid transparent;font-weight:500}
-.tab.active{color:var(--text);border-bottom-color:var(--primary)}
-.card{background:var(--panel);border:1px solid var(--border);border-radius:14px;overflow:hidden;margin-bottom:18px}
-.card-head{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--border)}
-.card-head h3{margin:0;font-size:15px}
-.card-body{padding:16px 18px}
-table{width:100%;border-collapse:collapse}
-th,td{text-align:left;padding:11px 16px;border-bottom:1px solid var(--border);font-size:13px}
-th{color:var(--muted);font-weight:500;background:#15171f}
-input,select{background:var(--panel2);border:1px solid var(--border);color:var(--text);padding:9px 12px;border-radius:8px;font-size:13px;width:100%}
-label{display:block;color:var(--muted);font-size:12px;margin:10px 0 5px}
-.row{display:flex;gap:12px;flex-wrap:wrap}
-.row>div{flex:1;min-width:180px}
-.auth-box{max-width:400px;margin:60px auto}
-.center{text-align:center}
-.msg{padding:10px 14px;border-radius:8px;margin:10px 0;font-size:13px}
-.msg.err{background:#3a1620;color:#fda4af;border:1px solid #4c2230}
-.msg.ok{background:#12301e;color:#86efac;border:1px solid #1d4a30}
-.mono{font-family:ui-monospace,Menlo,monospace;font-size:12px}
-.oauth-btns{display:flex;flex-direction:column;gap:8px;margin-top:14px}
-.muted{color:var(--muted)}
-a{color:var(--primary2)}
-</style>
+<title>llm_api · 控制台</title>
+<style>__CSS__</style>
 </head>
 <body>
 <div class="topbar">
-  <div class="brand"><div class="logo">⚡</div><span data-i18n="title">用户中心</span></div>
+  <a href="/" class="brand" style="text-decoration:none"><span class="logo">⚡</span><span data-i18n="title">控制台</span></a>
   <div class="top-actions">
-    <select id="lang" style="width:auto" onchange="setLang(this.value)">
-      <option value="zh">中文</option><option value="en">English</option>
+    <a href="/" class="btn sm ghost" data-i18n="backHome">返回首页</a>
+    <select id="lang" class="langsel" style="width:auto" onchange="setLang(this.value)">
+      <option value="zh">中文</option><option value="en">EN</option>
     </select>
     <span id="whoami" class="muted"></span>
     <button class="btn sm hidden" id="logoutBtn" onclick="logout()" data-i18n="logout">退出</button>
   </div>
 </div>
 
+<div id="announceWrap" class="wrap" style="margin-bottom:0"></div>
+
 <!-- 登录/注册 -->
 <div id="authView" class="wrap">
   <div class="auth-box card">
     <div class="card-body">
-      <div class="tabs">
+      <div class="tabs" style="margin-bottom:18px">
         <div class="tab active" id="tabLogin" onclick="switchAuth('login')" data-i18n="login">登录</div>
         <div class="tab" id="tabReg" onclick="switchAuth('register')" data-i18n="register">注册</div>
       </div>
@@ -84,21 +82,18 @@ a{color:var(--primary2)}
         <label data-i18n="username">用户名（可选）</label>
         <input id="username" type="text"/>
       </div>
-      <div style="margin-top:16px">
-        <button class="btn primary" style="width:100%" id="authSubmit" onclick="submitAuth()" data-i18n="login">登录</button>
+      <div style="margin-top:18px">
+        <button class="btn primary" style="width:100%;justify-content:center" id="authSubmit" onclick="submitAuth()" data-i18n="login">登录</button>
       </div>
       <div id="oauthArea" class="oauth-btns"></div>
     </div>
   </div>
 </div>
 
-<!-- 公告 -->
-<div class="wrap" id="announceWrap" style="margin-bottom:0"></div>
-
 <!-- 主界面 -->
 <div id="appView" class="wrap hidden">
   <div class="stats">
-    <div class="stat"><div class="label" data-i18n="balance">余额</div><div class="value" id="statBalance">-</div></div>
+    <div class="stat"><div class="label" data-i18n="balance">余额</div><div class="value grad" id="statBalance">-</div></div>
     <div class="stat"><div class="label" data-i18n="frozen">冻结中</div><div class="value" id="statFrozen">-</div></div>
     <div class="stat"><div class="label" data-i18n="tokens">令牌数</div><div class="value" id="statTokens">-</div></div>
   </div>
@@ -154,18 +149,19 @@ a{color:var(--primary2)}
 
 <script>
 const I18N = {
-  zh:{title:"用户中心",login:"登录",register:"注册",logout:"退出",email:"邮箱",password:"密码",
+  zh:{title:"控制台",backHome:"返回首页",login:"登录",register:"注册",logout:"退出",email:"邮箱",password:"密码",
       username:"用户名（可选）",balance:"余额",frozen:"冻结中",tokens:"令牌",topup:"充值",ledger:"账单",
       create:"新建",used:"已用",redeem:"兑换",onlinePay:"在线充值",method:"支付方式",amount:"金额(元/USDT)",
-      pay:"支付",type:"类型",balanceAfter:"余额",delete:"删除",loginWith:"使用 %s 登录",
+      pay:"支付",type:"类型",balanceAfter:"余额",delete:"删除",copy:"复制",loginWith:"使用 %s 登录",
       copied:"已复制",created:"创建成功",redeemOk:"兑换成功，到账 %s credits"},
-  en:{title:"User Center",login:"Login",register:"Register",logout:"Logout",email:"Email",password:"Password",
+  en:{title:"Console",backHome:"Home",login:"Login",register:"Register",logout:"Logout",email:"Email",password:"Password",
       username:"Username (optional)",balance:"Balance",frozen:"Frozen",tokens:"Tokens",topup:"Top up",ledger:"Ledger",
       create:"Create",used:"Used",redeem:"Redeem",onlinePay:"Online Payment",method:"Method",amount:"Amount",
-      pay:"Pay",type:"Type",balanceAfter:"Balance",delete:"Delete",loginWith:"Sign in with %s",
+      pay:"Pay",type:"Type",balanceAfter:"Balance",delete:"Delete",copy:"Copy",loginWith:"Sign in with %s",
       copied:"Copied",created:"Created",redeemOk:"Redeemed %s credits"}
 };
 let lang = localStorage.getItem("lang") || "zh";
+if(!I18N[lang]) lang="zh";
 let authMode = "login";
 function t(k){return (I18N[lang]&&I18N[lang][k])||k;}
 function session(){return localStorage.getItem("session")||"";}
@@ -194,8 +190,7 @@ function switchAuth(mode){
   document.getElementById("tabLogin").classList.toggle("active",mode==="login");
   document.getElementById("tabReg").classList.toggle("active",mode==="register");
   document.getElementById("regUsername").classList.toggle("hidden",mode!=="register");
-  const btn=document.getElementById("authSubmit");
-  btn.textContent = t(mode);
+  document.getElementById("authSubmit").textContent = t(mode);
 }
 function showMsg(id,text,ok){document.getElementById(id).innerHTML=`<div class="msg ${ok?'ok':'err'}">${text}</div>`;}
 
@@ -218,9 +213,12 @@ async function renderOAuth(){
   if(!providers) return;
   const area=document.getElementById("oauthArea");
   area.innerHTML="";
+  if((providers.oauth||[]).length){
+    const div=document.createElement("div");div.className="divider";div.textContent="OAuth";area.appendChild(div);
+  }
   (providers.oauth||[]).forEach(p=>{
     const b=document.createElement("button");
-    b.className="btn"; b.textContent=t("loginWith").replace("%s",p);
+    b.className="btn"; b.style.justifyContent="center"; b.textContent=t("loginWith").replace("%s",p);
     b.onclick=async()=>{const d=await api("/auth/oauth/"+p);location.href=d.authorize_url;};
     area.appendChild(b);
   });
@@ -257,10 +255,13 @@ async function loadTokens(){
   const d=await api("/auth/tokens");
   document.getElementById("statTokens").textContent=d.tokens.length;
   document.getElementById("tokenRows").innerHTML=d.tokens.map(tk=>
-    `<tr><td>${tk.id}</td><td>${tk.name}</td><td class="mono">${tk.key}</td>
+    `<tr><td>${tk.id}</td><td>${tk.name}</td>
+     <td><div class="keycell"><span class="mono">${tk.key}</span>
+       <button class="btn sm" onclick="copyKey('${tk.key}')">${t("copy")}</button></div></td>
      <td>${tk.used_tokens}</td>
      <td><button class="btn sm danger" onclick="delToken(${tk.id})">${t("delete")}</button></td></tr>`).join("");
 }
+function copyKey(k){navigator.clipboard.writeText(k);}
 async function createToken(){
   const name=document.getElementById("newTokenName").value.trim()||"token";
   await api("/auth/tokens",{method:"POST",body:JSON.stringify({name})});
@@ -284,7 +285,6 @@ async function redeem(){
 async function createOrder(){
   const method=document.getElementById("payMethod").value;
   const amt=parseFloat(document.getElementById("payAmount").value||"0");
-  // 法币按分，crypto 按微 USDT
   const amount_money = method==="crypto" ? Math.round(amt*1e6) : Math.round(amt*100);
   try{const d=await api("/pay/orders",{method:"POST",body:JSON.stringify({method,amount_money})});
     let html=`Order ${d.order_no} · ${d.status}`;
@@ -318,11 +318,14 @@ async function boot(){
   }catch(e){clearSession();boot();}
 }
 
-// OAuth 回调把 session 放在 query
 (function(){const p=new URLSearchParams(location.search);const s=p.get("session");
   if(s){setSession(s);history.replaceState({},"",location.pathname);}})();
 boot();
 </script>
 </body>
 </html>
-"""
+""".replace("__CSS__", _portal_css())
+
+
+def portal_html() -> str:
+    return PORTAL_HTML
