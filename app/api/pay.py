@@ -14,17 +14,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..core.state import AppServices
 from ..db.base import get_session
 from ..db.models import Order
-from ..domain.auth import Principal
 from ..domain.orders import OrderError
-from .deps import get_principal, get_services
+from .deps import get_services, get_user_id
 
 router = APIRouter(prefix="/pay")
-
-
-def _require_user(principal: Principal) -> int:
-    if not principal.user_id:
-        raise HTTPException(status_code=403, detail="a user-bound token is required to top up")
-    return principal.user_id
 
 
 @router.get("/methods")
@@ -38,9 +31,8 @@ async def create_order(
     request: Request,
     session: AsyncSession = Depends(get_session),
     services: AppServices = Depends(get_services),
-    principal: Principal = Depends(get_principal),
+    user_id: int = Depends(get_user_id),
 ):
-    user_id = _require_user(principal)
     try:
         payload = await request.json()
     except Exception:
@@ -61,9 +53,8 @@ async def get_order(
     order_no: str,
     session: AsyncSession = Depends(get_session),
     services: AppServices = Depends(get_services),
-    principal: Principal = Depends(get_principal),
+    user_id: int = Depends(get_user_id),
 ):
-    user_id = _require_user(principal)
     order = (
         await session.execute(select(Order).where(Order.order_no == order_no))
     ).scalar_one_or_none()
@@ -84,9 +75,8 @@ async def redeem(
     request: Request,
     session: AsyncSession = Depends(get_session),
     services: AppServices = Depends(get_services),
-    principal: Principal = Depends(get_principal),
+    user_id: int = Depends(get_user_id),
 ):
-    user_id = _require_user(principal)
     try:
         payload = await request.json()
     except Exception:

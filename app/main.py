@@ -8,6 +8,7 @@ from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 
 from .api import admin as admin_api
+from .api import auth as auth_api
 from .api import pay as pay_api
 from .api import v1 as v1_api
 from .bootstrap import bootstrap
@@ -16,6 +17,7 @@ from .core.cache import create_redis
 from .core.state import AppServices
 from .db.base import dispose_engine, init_engine
 from .web.admin_ui import ADMIN_HTML
+from .web.portal_ui import PORTAL_HTML
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -58,6 +60,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return {"status": "ok"}
 
     app.include_router(v1_api.router)
+    app.include_router(auth_api.router)
     app.include_router(pay_api.router)
     app.include_router(admin_api.router)
 
@@ -65,6 +68,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.get("/admin/ui", response_class=HTMLResponse)
     async def admin_ui():
         return HTMLResponse(ADMIN_HTML)
+
+    @app.get("/", response_class=HTMLResponse)
+    @app.get("/portal", response_class=HTMLResponse)
+    async def portal_ui():
+        return HTMLResponse(PORTAL_HTML)
 
     return app
 

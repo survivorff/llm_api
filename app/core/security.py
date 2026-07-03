@@ -3,23 +3,27 @@ import base64
 import hashlib
 import secrets
 
+import bcrypt
 from cryptography.fernet import Fernet, InvalidToken
-from passlib.context import CryptContext
-
-_pwd = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 def new_token_key() -> str:
     return "sk-" + secrets.token_urlsafe(24)
 
 
+def _prehash(password: str) -> bytes:
+    """bcrypt 只取前 72 字节。先做 sha256 再 base64，规避长度上限且不丢熵。"""
+    digest = hashlib.sha256(password.encode("utf-8")).digest()
+    return base64.b64encode(digest)
+
+
 def hash_password(password: str) -> str:
-    return _pwd.hash(password)
+    return bcrypt.hashpw(_prehash(password), bcrypt.gensalt()).decode("ascii")
 
 
 def verify_password(password: str, hashed: str) -> bool:
     try:
-        return _pwd.verify(password, hashed)
+        return bcrypt.checkpw(_prehash(password), hashed.encode("ascii"))
     except Exception:
         return False
 

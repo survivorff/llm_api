@@ -49,6 +49,16 @@ class Settings(BaseSettings):
     order_ttl_seconds: float = 1800.0  # 订单有效期（秒）
     reconcile_interval: float = 30.0   # 对账 worker 轮询周期（秒）
 
+    # ---- 账户 / 登录（v1.3）----
+    allow_registration: bool = True    # 是否开放邮箱注册
+    session_ttl_seconds: float = 604800.0  # 会话有效期（默认 7 天）
+    # OAuth 配置（JSON 字符串）。示例：
+    #   {"github":{"client_id":"...","client_secret":"...",
+    #              "redirect_uri":"https://host/auth/oauth/github/callback"},
+    #    "linuxdo":{...}, "google":{...}}
+    oauth_providers: str = "{}"
+    default_language: str = "zh"        # 默认界面语言 zh/en
+
     # ---- 旧配置兼容：首次启动可从 config.yaml 导入渠道 ----
     legacy_config_path: str | None = "config.yaml"
 
@@ -64,6 +74,14 @@ class Settings(BaseSettings):
         import json
         try:
             return json.loads(self.payment_providers or "{}")
+        except Exception:
+            return {}
+
+    @property
+    def oauth_config(self) -> dict:
+        import json
+        try:
+            return json.loads(self.oauth_providers or "{}")
         except Exception:
             return {}
 

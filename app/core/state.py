@@ -2,9 +2,11 @@
 import httpx
 
 from ..config import Settings
+from ..domain.accounts import AccountService
 from ..domain.auth import AuthService
 from ..domain.billing import BillingService
 from ..domain.health import HealthService
+from ..domain.oauth import build_oauth_providers
 from ..domain.orders import OrderService
 from ..domain.pricing import PricingService
 from ..domain.routing import Router
@@ -33,6 +35,12 @@ class AppServices:
         # 支付 provider（可插拔）+ 订单服务
         self.payments = build_providers(settings.payment_config)
         self.orders = OrderService(self.billing, self.payments, settings)
+        # 账户 / 会话 / OAuth（v1.3）
+        self.accounts = AccountService(
+            settings.session_secret, session_ttl=settings.session_ttl_seconds,
+            allow_registration=settings.allow_registration,
+        )
+        self.oauth = build_oauth_providers(settings.oauth_config)
 
     @classmethod
     def build(cls, settings: Settings, http, redis) -> "AppServices":

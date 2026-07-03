@@ -150,6 +150,19 @@ class RedemptionCode(Base):
     created_at: Mapped[float] = mapped_column(Float, default=_now)
 
 
+class OAuthAccount(Base):
+    """第三方登录绑定：(provider, sub) 唯一标识一个外部身份，关联本地 user。"""
+
+    __tablename__ = "oauth_accounts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    provider: Mapped[str] = mapped_column(String(32), index=True)  # github/linuxdo/telegram
+    sub: Mapped[str] = mapped_column(String(128), index=True)      # 外部用户唯一 ID
+    user_id: Mapped[int] = mapped_column(Integer, index=True)
+    email: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    created_at: Mapped[float] = mapped_column(Float, default=_now)
+
+
 class Setting(Base):
     __tablename__ = "settings"
 
