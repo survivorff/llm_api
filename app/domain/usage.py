@@ -131,3 +131,50 @@ class UsageService:
         today = _agg_row((await session.execute(_q(UsageLog.ts >= day_start))).one())
         window = _agg_row((await session.execute(_q(UsageLog.ts >= window_start))).one())
         return {"total": total, "today": today, "window": window, "days": days}
+
+    async def ranking(self, session: AsyncSession, *, by: str = "model",
+                      days: int = 30, limit: int = 10) -> list[dict]:
+        """按 model / user(token_name) / channel 的消耗排行（按区间）。"""
+        import time as _t
+        col = {"model": UsageLog.model, "user": UsageLog.token_name,
+               "channel": UsageLog.channel}.get(by, UsageLog.model)
+        start = _t.time() - max(days, 1) * 86400
+        rows = (
+            await session.execute(
+                select(
+                    func.coalesce(col, "(unknown)").label("key"),
+                    func.count().label("requests"),
+                    func.coalesce(func.sum(UsageLog.total_tokens), 0).label("tokens"),
+                    func.coalesce(func.sum(UsageLog.cost), 0).label("cost"),
+                ).where(UsageLog.ts >= start)
+                .group_by(col).order_by(func.sum(UsageLog.cost).desc()).limit(limit)
+            )
+        ).all()
+        return [dict(r._mapping) for r in rows]
+
+    async def timeseries(self, session: AsyncSession, *, days: int = 14,
+                         metric: str = "requests") -> list[dict]:
+        """按天分桶的序列（应用层分桶，跨方言一致）。返回 [{date, value}]。"""
+        import time as _t
+        start = _t.time() - max(days, 1) * 86400
+        rows = (
+            await session.execute(
+                select(UsageLog.ts, UsageLog.total_tokens, UsageLog.cost)
+                .where(UsageLog.ts >= start)
+            )
+        ).all()
+        buckets: dict[str, dict] = {}
+        for ts, tokens, cost in rows:
+            day = _t.strftime("%Y-%m-%d", _t.gmtime(ts))
+            b = buckets.setdefault(day, {"requests": 0, "tokens": 0, "cost": 0})
+            b["requests"] += 1
+            b["tokens"] += int(tokens or 0)
+            b["cost"] += int(cost or 0)
+        # 补齐空白日期
+        out = []
+        for i in range(max(days, 1) - 1, -1, -1):
+            day = _t.strftime("%Y-%m-%d", _t.gmtime(_t.time() - i * 86400))
+            b = buckets.get(day, {"requests": 0, "tokens": 0, "cost": 0})
+            out.append({"date": day, "value": b.get(metric, b["requests"]),
+                        "requests": b["requests"], "tokens": b["tokens"], "cost": b["cost"]})
+        return out

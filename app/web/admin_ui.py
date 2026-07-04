@@ -107,6 +107,7 @@ tbody tr:last-child td{border-bottom:none}
       <div class="tab" data-tab="channels" onclick="switchTab('channels')">渠道</div>
       <div class="tab" data-tab="pricing" onclick="switchTab('pricing')">定价</div>
       <div class="tab" data-tab="logs" onclick="switchTab('logs')">请求日志</div>
+      <div class="tab" data-tab="analytics" onclick="switchTab('analytics')">数据分析</div>
       <div class="tab" data-tab="redemption" onclick="switchTab('redemption')">兑换码</div>
       <div class="tab" data-tab="orders" onclick="switchTab('orders')">订单</div>
       <div class="tab" data-tab="settings" onclick="switchTab('settings')">系统设置</div>
@@ -114,8 +115,14 @@ tbody tr:last-child td{border-bottom:none}
     </div>
 
     <div id="tab-tokens">
-      <div class="card"><div class="card-head"><h3>访问令牌</h3><button class="btn primary sm" onclick="openTokenModal()">＋ 新建令牌</button></div>
-        <table><thead><tr><th>ID</th><th>名称</th><th>用户</th><th>Key</th><th>状态</th><th>用量</th><th>RPM</th><th>到期</th><th style="text-align:right">操作</th></tr></thead><tbody id="tokRows"></tbody></table>
+      <div class="card"><div class="card-head"><h3>访问令牌</h3>
+        <div style="display:flex;gap:8px">
+          <button class="btn sm" onclick="batchTokens('enable')">批量启用</button>
+          <button class="btn sm" onclick="batchTokens('disable')">批量停用</button>
+          <button class="btn sm danger" onclick="batchTokens('delete')">批量删除</button>
+          <button class="btn primary sm" onclick="openTokenModal()">＋ 新建令牌</button>
+        </div></div>
+        <table><thead><tr><th style="width:32px"><input type="checkbox" id="tokAll" onclick="toggleAllTokens(this.checked)"/></th><th>ID</th><th>名称</th><th>用户</th><th>Key</th><th>状态</th><th>用量</th><th>RPM</th><th>到期</th><th style="text-align:right">操作</th></tr></thead><tbody id="tokRows"></tbody></table>
       </div>
     </div>
 
@@ -157,6 +164,20 @@ tbody tr:last-child td{border-bottom:none}
           <button class="btn sm" onclick="logsNext()">下一页</button>
         </div>
       </div>
+    </div>
+
+    <div id="tab-analytics" class="hidden">
+      <div class="card"><div class="card-head"><h3>数据分析</h3>
+        <select id="anDays" onchange="loadAnalytics()" style="padding:7px 10px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text)"><option value="7">近 7 天</option><option value="30" selected>近 30 天</option><option value="90">近 90 天</option></select>
+      </div></div>
+      <div class="stats" id="anRevenue"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+        <div class="card"><div class="card-head"><h3>模型消耗排行</h3></div><table><thead><tr><th>模型</th><th>请求</th><th>Tokens</th><th>费用</th></tr></thead><tbody id="rankModel"></tbody></table></div>
+        <div class="card"><div class="card-head"><h3>用户消耗排行</h3></div><table><thead><tr><th>令牌</th><th>请求</th><th>Tokens</th><th>费用</th></tr></thead><tbody id="rankUser"></tbody></table></div>
+      </div>
+      <div class="card"><div class="card-head"><h3>渠道消耗排行</h3></div><table><thead><tr><th>渠道</th><th>请求</th><th>Tokens</th><th>费用</th></tr></thead><tbody id="rankChannel"></tbody></table></div>
+      <div class="card"><div class="card-head"><h3>按天趋势</h3></div><table><thead><tr><th>日期</th><th>请求</th><th>Tokens</th><th>费用(credits)</th></tr></thead><tbody id="tsRows"></tbody></table></div>
+      <div class="card"><div class="card-head"><h3>告警</h3></div><div style="padding:16px 18px" id="alertsBox"></div></div>
     </div>
 
     <div id="tab-redemption" class="hidden">
@@ -207,9 +228,9 @@ function doLogin(){const k=$('#loginKey').value.trim();if(!k){$('#loginErr').tex
 function logout(){localStorage.removeItem('llm_admin_key');$('#loginKey').value='';showLogin('');}
 async function enterApp(){try{await api('/admin/tokens');}catch(e){return;}$('#login').classList.add('hidden');$('#app').classList.remove('hidden');loadAll();}
 
-const TABS=['tokens','users','channels','pricing','logs','redemption','orders','settings','audit'];
+const TABS=['tokens','users','channels','pricing','logs','analytics','redemption','orders','settings','audit'];
 function switchTab(n){document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.tab===n));TABS.forEach(x=>$('#tab-'+x).classList.toggle('hidden',x!==n));
-  if(n==='logs')loadLogs();else if(n==='redemption')loadCodes();else if(n==='orders')loadOrders();else if(n==='settings')loadSettings();else if(n==='audit')loadAudit();}
+  if(n==='logs')loadLogs();else if(n==='analytics')loadAnalytics();else if(n==='redemption')loadCodes();else if(n==='orders')loadOrders();else if(n==='settings')loadSettings();else if(n==='audit')loadAudit();}
 function maskKey(k){return k&&k.length>14?k.slice(0,7)+'····'+k.slice(-4):k;}
 function fmtDate(ts){return ts==null?'永久':new Date(ts*1000).toLocaleDateString('zh-CN');}
 function fmtTime(ts){return ts==null?'-':new Date(ts*1000).toLocaleString('zh-CN');}
@@ -236,14 +257,14 @@ function userName(id){const u=STATE.users.find(x=>x.id===id);return u?u.username
 
 function renderTokens(){
   const tb=$('#tokRows');tb.innerHTML='';
-  if(!STATE.tokens.length){tb.innerHTML='<tr><td colspan="9"><div class="empty">还没有令牌</div></td></tr>';return;}
+  if(!STATE.tokens.length){tb.innerHTML='<tr><td colspan="10"><div class="empty">还没有令牌</div></td></tr>';return;}
   for(const t of STATE.tokens){
     const expired=isExpired(t.expires_at);
     let badge=t.enabled?'<span class="badge on"><span class="dot"></span>启用</span>':'<span class="badge off"><span class="dot"></span>停用</span>';
     if(t.enabled&&expired)badge='<span class="badge exp"><span class="dot"></span>已过期</span>';
     let usage=t.quota_tokens==null?`<span class="mono">${(t.used_tokens||0).toLocaleString()} / ∞</span>`:`<span class="mono">${(t.used_tokens||0).toLocaleString()} / ${t.quota_tokens.toLocaleString()}</span>`;
     const tr=document.createElement('tr');
-    tr.innerHTML=`<td class="mono">${t.id}</td><td>${t.name||'-'}</td><td>${userName(t.user_id)}</td>
+    tr.innerHTML=`<td><input type="checkbox" class="tokChk" value="${t.id}"/></td><td class="mono">${t.id}</td><td>${t.name||'-'}</td><td>${userName(t.user_id)}</td>
       <td><div class="keycell"><span class="k mono" title="${t.key}">${maskKey(t.key)}</span><button class="icon-btn" onclick='copyKey(${JSON.stringify(t.key)})'>⧉</button></div></td>
       <td>${badge}</td><td>${usage}</td><td class="mono">${t.rpm_limit==null?'∞':t.rpm_limit}</td><td>${fmtDate(t.expires_at)}</td>
       <td style="text-align:right;white-space:nowrap">
@@ -390,6 +411,35 @@ async function loadAudit(){
     <td>${l.target||'-'}</td><td class="mono" style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title='${(l.detail||"").replace(/'/g,"")}'>${l.detail||''}</td><td class="mono">${l.ip||'-'}</td></tr>`).join(''):'<tr><td colspan="6"><div class="empty">暂无</div></td></tr>';
 }
 
+/* ---- 数据分析（v2.4）---- */
+function usd(c){return '$'+((c||0)/1e6).toFixed(2);}
+async function loadAnalytics(){
+  const days=parseInt($('#anDays').value);
+  const [ov,rm,ru,rc,ts,al]=await Promise.all([
+    api('/admin/analytics/overview?days='+days),
+    api('/admin/analytics/ranking?by=model&days='+days),
+    api('/admin/analytics/ranking?by=user&days='+days),
+    api('/admin/analytics/ranking?by=channel&days='+days),
+    api('/admin/analytics/timeseries?days='+Math.min(days,30)+'&metric=cost'),
+    api('/admin/alerts?min_balance=1'),
+  ]);
+  const rev=ov.revenue;
+  $('#anRevenue').innerHTML=`
+    <div class="stat"><div class="label">充值收入</div><div class="value">${usd(rev.topup)}</div></div>
+    <div class="stat"><div class="label">消费</div><div class="value">${usd(rev.consume)}</div></div>
+    <div class="stat"><div class="label">退款</div><div class="value">${usd(rev.refund)}</div></div>
+    <div class="stat"><div class="label">净收入</div><div class="value">${usd(rev.net_income)}</div></div>`;
+  const rrow=r=>`<tr><td>${r.key||'-'}</td><td class="mono">${r.requests}</td><td class="mono">${(r.tokens||0).toLocaleString()}</td><td class="mono">${usd(r.cost)}</td></tr>`;
+  $('#rankModel').innerHTML=rm.ranking.length?rm.ranking.map(rrow).join(''):'<tr><td colspan="4"><div class="empty">暂无</div></td></tr>';
+  $('#rankUser').innerHTML=ru.ranking.length?ru.ranking.map(rrow).join(''):'<tr><td colspan="4"><div class="empty">暂无</div></td></tr>';
+  $('#rankChannel').innerHTML=rc.ranking.length?rc.ranking.map(rrow).join(''):'<tr><td colspan="4"><div class="empty">暂无</div></td></tr>';
+  $('#tsRows').innerHTML=ts.series.map(s=>`<tr><td class="mono">${s.date}</td><td class="mono">${s.requests}</td><td class="mono">${(s.tokens||0).toLocaleString()}</td><td class="mono">${s.cost}</td></tr>`).join('');
+  let alerts='';
+  if(al.circuit_open.length)alerts+='<div class="msg err">⚠️ 熔断渠道：'+al.circuit_open.map(c=>c.name+'(失败'+c.fail_count+')').join('、')+'</div>';
+  if(al.low_balance.length)alerts+='<div class="msg err">💰 低余额用户：'+al.low_balance.map(u=>u.username).join('、')+'</div>';
+  $('#alertsBox').innerHTML=alerts||'<div class="empty">一切正常</div>';
+}
+
 /* ---- token modal ---- */
 function openTokenModal(t){
   const opts=STATE.users.map(u=>`<option value="${u.id}" ${t&&t.user_id===u.id?'selected':''}>${u.username}</option>`).join('');
@@ -414,6 +464,15 @@ async function submitToken(id){
 }
 async function toggleToken(id,en){await api('/admin/tokens/'+id,{method:'PATCH',body:JSON.stringify({enabled:en})});loadAll();}
 async function delToken(id){if(confirm('确认删除此令牌？')){await api('/admin/tokens/'+id,{method:'DELETE'});toast('已删除','ok');loadAll();}}
+function toggleAllTokens(ck){document.querySelectorAll('.tokChk').forEach(c=>c.checked=ck);}
+async function batchTokens(action){
+  const ids=[...document.querySelectorAll('.tokChk:checked')].map(c=>parseInt(c.value));
+  if(!ids.length){toast('请先勾选令牌','err');return;}
+  const label={enable:'启用',disable:'停用',delete:'删除'}[action];
+  if(!confirm(`确认批量${label} ${ids.length} 个令牌？`))return;
+  try{const d=await api('/admin/tokens/batch',{method:'POST',body:JSON.stringify({ids,action})});
+    toast(`已${label} ${d.affected} 个`,'ok');const a=$('#tokAll');if(a)a.checked=false;loadAll();}catch(e){}
+}
 
 /* ---- user modal ---- */
 function openUserModal(){

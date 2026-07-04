@@ -426,6 +426,113 @@ async def mark_order_paid(order_no: str, request: Request,
     return {"ok": True, "order_no": order_no}
 
 
+# ---------------- analytics & batch (v2.4) ----------------
+@router.get("/analytics/overview")
+async def analytics_overview(session: AsyncSession = Depends(get_session),
+                             services: AppServices = Depends(get_services), days: int = 30):
+    days = max(1, min(days, 365))
+    revenue = await services.billing.revenue(session, days=days)
+    usage_stats = await services.usage.stats(session, days=min(days, 90))
+    return {"revenue": revenue, "usage": usage_stats}
+
+
+@router.get("/analytics/ranking")
+async def analytics_ranking(session: AsyncSession = Depends(get_session),
+                            services: AppServices = Depends(get_services),
+                            by: str = "model", days: int = 30, limit: int = 10):
+    if by not in ("model", "user", "channel"):
+        raise HTTPException(status_code=400, detail="by must be model|user|channel")
+    limit = max(1, min(limit, 100))
+    return {"by": by, "days": days,
+            "ranking": await services.usage.ranking(session, by=by, days=days, limit=limit)}
+
+
+@router.get("/analytics/timeseries")
+async def analytics_timeseries(session: AsyncSession = Depends(get_session),
+                               services: AppServices = Depends(get_services),
+                               days: int = 14, metric: str = "requests"):
+    if metric not in ("requests", "cost", "tokens"):
+        raise HTTPException(status_code=400, detail="metric must be requests|cost|tokens")
+    days = max(1, min(days, 90))
+    return {"metric": metric, "days": days,
+            "series": await services.usage.timeseries(session, days=days, metric=metric)}
+
+
+@router.get("/alerts")
+async def alerts(session: AsyncSession = Depends(get_session),
+                 services: AppServices = Depends(get_services), min_balance: int = 0):
+    # 熔断渠道
+    circuit = (await session.execute(select(Channel).where(Channel.status == 2))).scalars().all()
+    circuit_open = [{"id": c.id, "name": c.name, "fail_count": c.fail_count} for c in circuit]
+    # 低余额用户（启用中、余额 <= 阈值）
+    low = []
+    if min_balance > 0:
+        rows = (await session.execute(
+            select(User).where(User.status == 1, User.balance <= min_balance).limit(50)
+        )).scalars().all()
+        low = [{"id": u.id, "username": u.username, "balance": u.balance} for u in rows]
+    return {"circuit_open": circuit_open, "low_balance": low}
+
+
+@router.post("/tokens/batch")
+async def tokens_batch(request: Request, session: AsyncSession = Depends(get_session),
+                       services: AppServices = Depends(get_services), payload: dict = Body(default={})):
+    ids = payload.get("ids") or []
+    action = payload.get("action")
+    if not isinstance(ids, list) or not ids or action not in ("enable", "disable", "delete"):
+        raise HTTPException(status_code=400, detail="ids[] and action(enable|disable|delete) required")
+    ids = [int(i) for i in ids][:500]
+    rows = (await session.execute(select(Token).where(Token.id.in_(ids)))).scalars().all()
+    n = 0
+    for t in rows:
+        if action == "delete":
+            await session.delete(t)
+        else:
+            t.enabled = 1 if action == "enable" else 0
+        n += 1
+    await session.commit()
+    await services.audit.record(session, actor="admin", action=f"batch.token.{action}",
+                                detail={"count": n, "ids": ids},
+                                ip=request.client.host if request.client else None)
+    return {"affected": n, "action": action}
+
+
+@router.post("/users/batch-topup")
+async def users_batch_topup(request: Request, session: AsyncSession = Depends(get_session),
+                            services: AppServices = Depends(get_services), payload: dict = Body(default={})):
+    user_ids = payload.get("user_ids") or []
+    amount = int(payload.get("amount") or 0)
+    if not user_ids or amount == 0:
+        raise HTTPException(status_code=400, detail="user_ids[] and non-zero amount required")
+    n = 0
+    for uid in [int(i) for i in user_ids][:500]:
+        u = await services.billing.topup(session, uid, amount, ref="admin-batch", type_="adjust")
+        if u is not None:
+            n += 1
+    await services.audit.record(session, actor="admin", action="batch.user.topup",
+                                detail={"count": n, "amount": amount},
+                                ip=request.client.host if request.client else None)
+    return {"affected": n, "amount": amount}
+
+
+@router.post("/redemption/grant")
+async def redemption_grant(request: Request, session: AsyncSession = Depends(get_session),
+                           services: AppServices = Depends(get_services), payload: dict = Body(default={})):
+    """直接给指定用户充值（记流水），用于线下/客服补偿场景。"""
+    uid = payload.get("user_id")
+    amount = int(payload.get("amount") or 0)
+    if not uid or amount <= 0:
+        raise HTTPException(status_code=400, detail="user_id and positive amount required")
+    u = await services.billing.topup(session, int(uid), amount,
+                                     ref=f"grant:{payload.get('note', '')}", type_="topup")
+    if u is None:
+        raise HTTPException(status_code=404, detail="user not found")
+    await services.audit.record(session, actor="admin", action="user.grant", target=str(uid),
+                                detail={"amount": amount},
+                                ip=request.client.host if request.client else None)
+    return _user_dict(u)
+
+
 # ---------------- serializers ----------------
 def _user_dict(u: User) -> dict:
     return {"id": u.id, "username": u.username, "email": u.email, "role": u.role,
