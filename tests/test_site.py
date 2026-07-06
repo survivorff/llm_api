@@ -96,3 +96,33 @@ def test_email_auth_disabled_by_default(monkeypatch, tmp_path, mock_upstream):
         assert r.status_code == 403
         r = client.post("/auth/login", json={"email": "a@b.com", "password": "secret1"})
         assert r.status_code == 403
+
+
+def test_models_page(gateway):
+    r = gateway.get("/models")
+    assert r.status_code == 200
+    assert "/public/models" in r.text and "/public/pricing" in r.text
+    # 主题切换存在
+    assert "__toggleTheme" in r.text
+
+
+def test_public_stats(gateway):
+    r = gateway.get("/public/stats")
+    assert r.status_code == 200
+    body = r.json()
+    for k in ("models", "channels", "total_requests", "total_tokens"):
+        assert k in body
+
+
+def test_home_has_theme_and_statbar(gateway):
+    r = gateway.get("/")
+    assert "__toggleTheme" in r.text
+    assert "statbar" in r.text
+    assert "/public/stats" in r.text
+
+
+def test_admin_sidebar_layout(gateway):
+    r = gateway.get("/admin")
+    assert r.status_code == 200
+    assert 'class="sidebar"' in r.text
+    assert "__toggleTheme" in r.text

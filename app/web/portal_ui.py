@@ -10,12 +10,10 @@ from .shared import base_css
 def _portal_css() -> str:
     return base_css() + r"""
 /* 控制台专属 */
-.topbar{display:flex;align-items:center;justify-content:space-between;height:62px;padding:0 24px;
-  background:rgba(11,13,19,.9);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:50}
+.topbar{display:flex;align-items:center;justify-content:space-between;height:60px;padding:0 24px;
+  background:var(--panel);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:50}
 .top-actions{display:flex;gap:10px;align-items:center}
 .wrap{max-width:1000px;margin:28px auto;padding:0 20px}
-.btn.danger{color:#fda4af;border-color:#4c2230;background:transparent}
-.btn.danger:hover{background:#3a1620;border-color:#4c2230}
 .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:24px}
 .stat{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:20px 22px}
 .stat .label{color:var(--muted);font-size:12px;margin-bottom:8px;text-transform:uppercase;letter-spacing:.05em}
@@ -43,18 +41,25 @@ label{display:block;color:var(--muted);font-size:12px;margin:10px 0 5px}
 
 
 PORTAL_HTML = r"""<!doctype html>
-<html lang="zh">
+<html lang="zh" data-theme="light">
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
 <title>llm_api · 控制台</title>
 <style>__CSS__</style>
+<script>
+(function(){const K='theme';function sd(){return matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches;}
+function rv(){const s=localStorage.getItem(K);return s==='dark'||s==='light'?s:(sd()?'dark':'light');}
+window.__toggleTheme=function(){const c=document.documentElement.getAttribute('data-theme')||rv();const n=c==='dark'?'light':'dark';localStorage.setItem(K,n);document.documentElement.setAttribute('data-theme',n);var b=document.getElementById('themeBtn');if(b)b.textContent=n==='dark'?'☀':'🌙';};
+document.documentElement.setAttribute('data-theme',rv());})();
+</script>
 </head>
 <body>
 <div class="topbar">
   <a href="/" class="brand" style="text-decoration:none"><span class="logo">⚡</span><span data-i18n="title">控制台</span></a>
   <div class="top-actions">
     <a href="/" class="btn sm ghost" data-i18n="backHome">返回首页</a>
+    <button class="icon-toggle" id="themeBtn" onclick="__toggleTheme()" title="切换主题">🌙</button>
     <select id="lang" class="langsel" style="width:auto" onchange="setLang(this.value)">
       <option value="zh">中文</option><option value="en">EN</option>
     </select>
@@ -341,6 +346,7 @@ async function boot(){
 
 (function(){const p=new URLSearchParams(location.search);const s=p.get("session");
   if(s){setSession(s);history.replaceState({},"",location.pathname);}})();
+(function(){var t=document.documentElement.getAttribute('data-theme');var b=document.getElementById('themeBtn');if(b)b.textContent=t==='dark'?'☀':'🌙';})();
 boot();
 </script>
 </body>

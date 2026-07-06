@@ -60,6 +60,33 @@ async def public_models(session: AsyncSession = Depends(get_session)):
     return {"models": models}
 
 
+@public_router.get("/public/stats")
+async def public_stats(session: AsyncSession = Depends(get_session),
+                       services: AppServices = Depends(get_services)):
+    """对外安全的聚合数字：模型数、渠道数、累计请求。不含任何敏感信息。"""
+    import json as _json
+    from sqlalchemy import func as _f
+    channels = (await session.execute(
+        select(Channel).where(Channel.status == 1)
+    )).scalars().all()
+    model_set: set[str] = set()
+    for c in channels:
+        try:
+            for m in _json.loads(c.models or "[]"):
+                m = str(m).strip()
+                if m and m != "*" and not m.endswith("*"):
+                    model_set.add(m)
+        except Exception:
+            pass
+    usage = await services.usage.stats(session, days=1)
+    return {
+        "models": len(model_set),
+        "channels": len(channels),
+        "total_requests": usage.get("total", {}).get("requests", 0),
+        "total_tokens": usage.get("total", {}).get("tokens", 0),
+    }
+
+
 @public_router.get("/public/pricing")
 async def public_pricing(session: AsyncSession = Depends(get_session),
                          services: AppServices = Depends(get_services)):

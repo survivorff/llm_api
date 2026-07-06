@@ -10,51 +10,73 @@ ADMIN_HTML = r"""<!doctype html>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
 <title>llm_api · 网关后台</title>
 <style>
-:root{--bg:#0f1117;--panel:#181b24;--panel2:#1f2330;--border:#2a2f3d;--text:#e6e8ee;
---muted:#9aa3b2;--primary:#6366f1;--primary2:#818cf8;--green:#22c55e;--red:#ef4444;--amber:#f59e0b;--cyan:#22d3ee;}
+:root{
+  --bg:#fafafb;--bg2:#f3f4f7;--panel:#ffffff;--panel2:#f6f7f9;--border:#e5e7ee;
+  --text:#16181f;--muted:#5b6472;--dim:#8b94a3;
+  --primary:#4f46e5;--primary2:#6366f1;--accent:#0ea5e9;--green:#16a34a;--red:#dc2626;--amber:#d97706;
+  --sidebar:#ffffff;--shadow:0 1px 3px rgba(16,18,31,.06);
+}
+:root[data-theme="dark"]{
+  --bg:#0b0d13;--bg2:#0f1219;--panel:#141824;--panel2:#1b2130;--border:#262d3d;
+  --text:#e8eaf0;--muted:#98a1b3;--dim:#6b7488;
+  --primary:#6366f1;--primary2:#818cf8;--accent:#22d3ee;--green:#22c55e;--red:#ef4444;--amber:#f59e0b;
+  --sidebar:#0f1219;--shadow:0 1px 3px rgba(0,0,0,.4);
+}
 *{box-sizing:border-box}
-body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,"PingFang SC",sans-serif;background:var(--bg);color:var(--text);font-size:14px}
+body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",sans-serif;background:var(--bg);color:var(--text);font-size:14px}
 .hidden{display:none!important}
-.topbar{display:flex;align-items:center;justify-content:space-between;padding:14px 24px;background:linear-gradient(90deg,#1a1d27,#181b24);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:10}
-.brand{display:flex;align-items:center;gap:10px;font-weight:600;font-size:16px}
-.logo{width:28px;height:28px;border-radius:8px;background:linear-gradient(135deg,var(--primary),var(--cyan));display:flex;align-items:center;justify-content:center;font-size:15px}
+/* 左侧边栏布局 */
+.layout{display:flex;min-height:100vh}
+.sidebar{width:216px;flex-shrink:0;background:var(--sidebar);border-right:1px solid var(--border);
+  display:flex;flex-direction:column;position:sticky;top:0;height:100vh;overflow-y:auto}
+.sidebar .brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:16px;padding:18px 20px;border-bottom:1px solid var(--border)}
+.sidebar .logo{width:28px;height:28px;border-radius:8px;background:linear-gradient(135deg,var(--primary),var(--accent));display:flex;align-items:center;justify-content:center;font-size:15px;color:#fff}
+.navm{padding:12px 10px;flex:1}
+.navm .item{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:9px;cursor:pointer;color:var(--muted);font-size:14px;font-weight:500;margin-bottom:2px}
+.navm .item:hover{background:var(--panel2);color:var(--text)}
+.navm .item.active{background:color-mix(in srgb,var(--primary) 12%,transparent);color:var(--primary)}
+.navm .item .ic{width:18px;text-align:center}
+.sidebar .foot{padding:12px 14px;border-top:1px solid var(--border);display:flex;gap:8px;align-items:center}
+.main{flex:1;min-width:0;display:flex;flex-direction:column}
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:14px 24px;border-bottom:1px solid var(--border);background:var(--panel);position:sticky;top:0;z-index:10}
+.topbar h2{margin:0;font-size:17px}
 .top-actions{display:flex;gap:8px;align-items:center}
-.wrap{max-width:1280px;margin:24px auto;padding:0 20px}
-.btn{border:1px solid var(--border);background:var(--panel2);color:var(--text);padding:8px 14px;border-radius:8px;cursor:pointer;font-size:13px;transition:.15s}
-.btn:hover{border-color:var(--primary);background:#262b3a}
-.btn.primary{background:linear-gradient(135deg,var(--primary),var(--primary2));border:none;color:#fff;font-weight:600}
-.btn.ghost{background:transparent}
-.btn.sm{padding:5px 10px;font-size:12px}
-.btn.danger{color:#fda4af;border-color:#4c2230}
-.btn.danger:hover{background:#3a1620;border-color:var(--red)}
+.wrap{padding:24px;max-width:1280px;width:100%}
+.icon-toggle{width:32px;height:32px;border-radius:8px;border:1px solid var(--border);background:var(--panel);color:var(--muted);cursor:pointer;font-size:14px}
+.icon-toggle:hover{color:var(--text);border-color:var(--primary)}
+.btn{border:1px solid var(--border);background:var(--panel);color:var(--text);padding:8px 14px;border-radius:8px;cursor:pointer;font-size:13px;transition:.15s;box-shadow:var(--shadow)}
+.btn:hover{border-color:var(--primary)}
+.btn.primary{background:var(--primary);border-color:var(--primary);color:#fff;font-weight:600}
+.btn.primary:hover{filter:brightness(1.06)}
+.btn.ghost{background:transparent;box-shadow:none}
+.btn.sm{padding:5px 10px;font-size:12px;box-shadow:none}
+.btn.danger{color:var(--red);border-color:color-mix(in srgb,var(--red) 40%,var(--border))}
+.btn.danger:hover{background:color-mix(in srgb,var(--red) 10%,transparent)}
 .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:22px}
-.stat{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:16px 18px}
+.stat{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:16px 18px;box-shadow:var(--shadow)}
 .stat .label{color:var(--muted);font-size:12px;margin-bottom:6px}
 .stat .value{font-size:24px;font-weight:700}
 .stat .sub{color:var(--muted);font-size:12px;margin-top:4px}
-.tabs{display:flex;gap:4px;margin-bottom:14px;border-bottom:1px solid var(--border);flex-wrap:wrap}
-.tab{padding:10px 14px;cursor:pointer;color:var(--muted);border-bottom:2px solid transparent;font-weight:500;font-size:13px}
-.tab.active{color:var(--text);border-bottom-color:var(--primary)}
-.card{background:var(--panel);border:1px solid var(--border);border-radius:14px;overflow:hidden;margin-bottom:18px}
+.card{background:var(--panel);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:18px;box-shadow:var(--shadow)}
 .card-head{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--border);flex-wrap:wrap;gap:8px}
 .card-head h3{margin:0;font-size:15px}
 table{width:100%;border-collapse:collapse}
 th,td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--border);font-size:13px;vertical-align:middle}
-th{color:var(--muted);font-weight:500;background:#15171f}
-tbody tr:hover{background:#1c202b}
+th{color:var(--muted);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.03em;background:var(--bg2)}
+tbody tr:hover{background:var(--panel2)}
 tbody tr:last-child td{border-bottom:none}
 .mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px}
 .badge{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:20px;font-size:12px;font-weight:500}
-.badge.on{background:rgba(34,197,94,.14);color:#4ade80}
-.badge.off{background:rgba(239,68,68,.14);color:#f87171}
-.badge.exp{background:rgba(245,158,11,.14);color:#fbbf24}
+.badge.on{background:color-mix(in srgb,var(--green) 14%,transparent);color:var(--green)}
+.badge.off{background:color-mix(in srgb,var(--red) 14%,transparent);color:var(--red)}
+.badge.exp{background:color-mix(in srgb,var(--amber) 14%,transparent);color:var(--amber)}
 .dot{width:6px;height:6px;border-radius:50%;background:currentColor}
 .keycell{display:flex;align-items:center;gap:8px}
 .keycell .k{max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .icon-btn{background:none;border:none;color:var(--muted);cursor:pointer;font-size:13px;padding:2px}
 .icon-btn:hover{color:var(--primary2)}
-.overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:50}
-.modal{background:var(--panel);border:1px solid var(--border);border-radius:16px;width:520px;max-width:94vw;padding:22px;max-height:90vh;overflow:auto}
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:50}
+.modal{background:var(--panel);border:1px solid var(--border);border-radius:14px;width:520px;max-width:94vw;padding:22px;max-height:90vh;overflow:auto}
 .modal h3{margin:0 0 16px}
 .field{margin-bottom:13px}
 .field label{display:block;color:var(--muted);font-size:12px;margin-bottom:5px}
@@ -68,16 +90,22 @@ tbody tr:last-child td{border-bottom:none}
 .filters input,.filters select{padding:7px 10px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:12px}
 .pager{display:flex;gap:8px;align-items:center;justify-content:flex-end;padding:12px 18px}
 .login{min-height:100vh;display:flex;align-items:center;justify-content:center}
-.login .box{background:var(--panel);border:1px solid var(--border);border-radius:18px;padding:32px;width:360px;text-align:center}
-.login .logo{width:46px;height:46px;border-radius:12px;margin:0 auto 14px;font-size:22px}
+.login .box{background:var(--panel);border:1px solid var(--border);border-radius:16px;padding:32px;width:360px;text-align:center;box-shadow:var(--shadow)}
+.login .logo{width:46px;height:46px;border-radius:12px;margin:0 auto 14px;font-size:22px;background:linear-gradient(135deg,var(--primary),var(--accent));display:flex;align-items:center;justify-content:center;color:#fff}
 .login h2{margin:0 0 4px}.login p{color:var(--muted);margin:0 0 20px;font-size:13px}
 .login input{width:100%;padding:11px;background:var(--panel2);border:1px solid var(--border);border-radius:9px;color:var(--text);margin-bottom:12px}
 #toasts{position:fixed;right:18px;bottom:18px;display:flex;flex-direction:column;gap:8px;z-index:100}
-.toast{background:var(--panel2);border:1px solid var(--border);border-left:3px solid var(--primary);padding:11px 16px;border-radius:9px;min-width:200px;box-shadow:0 8px 24px rgba(0,0,0,.4)}
+.toast{background:var(--panel);border:1px solid var(--border);border-left:3px solid var(--primary);padding:11px 16px;border-radius:9px;min-width:200px;box-shadow:0 8px 24px rgba(0,0,0,.2)}
 .toast.ok{border-left-color:var(--green)}.toast.err{border-left-color:var(--red)}
 .empty{padding:30px;text-align:center;color:var(--muted)}
-@media(max-width:720px){.stats{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:820px){.sidebar{position:fixed;left:-220px;z-index:60;transition:.2s}.sidebar.open{left:0}.stats{grid-template-columns:repeat(2,1fr)}}
 </style>
+<script>
+(function(){const K='theme';function sd(){return matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches;}
+function rv(){const s=localStorage.getItem(K);return s==='dark'||s==='light'?s:(sd()?'dark':'light');}
+window.__toggleTheme=function(){const c=document.documentElement.getAttribute('data-theme')||rv();const n=c==='dark'?'light':'dark';localStorage.setItem(K,n);document.documentElement.setAttribute('data-theme',n);var b=document.getElementById('themeBtn');if(b)b.textContent=n==='dark'?'☀':'🌙';};
+document.documentElement.setAttribute('data-theme',rv());})();
+</script>
 </head>
 <body>
 <div id="login" class="login">
@@ -92,28 +120,34 @@ tbody tr:last-child td{border-bottom:none}
 </div>
 
 <div id="app" class="hidden">
-  <div class="topbar">
-    <div class="brand"><span class="logo">⚡</span> llm_api 网关后台</div>
-    <div class="top-actions">
-      <button class="btn ghost" onclick="loadAll()">↻ 刷新</button>
-      <button class="btn ghost" onclick="logout()">退出</button>
+ <div class="layout">
+  <aside class="sidebar" id="sidebar">
+    <div class="brand"><span class="logo">⚡</span> llm_api</div>
+    <nav class="navm">
+      <div class="item active" data-tab="tokens" onclick="switchTab('tokens')"><span class="ic">🎫</span>令牌</div>
+      <div class="item" data-tab="users" onclick="switchTab('users')"><span class="ic">👤</span>用户</div>
+      <div class="item" data-tab="channels" onclick="switchTab('channels')"><span class="ic">🔌</span>渠道</div>
+      <div class="item" data-tab="pricing" onclick="switchTab('pricing')"><span class="ic">💲</span>定价</div>
+      <div class="item" data-tab="logs" onclick="switchTab('logs')"><span class="ic">📜</span>请求日志</div>
+      <div class="item" data-tab="analytics" onclick="switchTab('analytics')"><span class="ic">📊</span>数据分析</div>
+      <div class="item" data-tab="redemption" onclick="switchTab('redemption')"><span class="ic">🎟️</span>兑换码</div>
+      <div class="item" data-tab="orders" onclick="switchTab('orders')"><span class="ic">🧾</span>订单</div>
+      <div class="item" data-tab="settings" onclick="switchTab('settings')"><span class="ic">⚙️</span>系统设置</div>
+      <div class="item" data-tab="audit" onclick="switchTab('audit')"><span class="ic">🔍</span>审计</div>
+    </nav>
+    <div class="foot">
+      <button class="icon-toggle" id="themeBtn" onclick="__toggleTheme()" title="切换主题">🌙</button>
+      <button class="btn sm ghost" onclick="loadAll()">↻ 刷新</button>
+      <button class="btn sm ghost" onclick="logout()">退出</button>
     </div>
-  </div>
-  <div class="wrap">
+  </aside>
+  <div class="main">
+    <div class="topbar">
+      <h2 id="pageTitle">令牌</h2>
+      <div class="top-actions"><a class="btn sm ghost" href="/" target="_blank">↗ 前台</a></div>
+    </div>
+    <div class="wrap">
     <div class="stats" id="stats"></div>
-    <div class="tabs">
-      <div class="tab active" data-tab="tokens" onclick="switchTab('tokens')">令牌</div>
-      <div class="tab" data-tab="users" onclick="switchTab('users')">用户</div>
-      <div class="tab" data-tab="channels" onclick="switchTab('channels')">渠道</div>
-      <div class="tab" data-tab="pricing" onclick="switchTab('pricing')">定价</div>
-      <div class="tab" data-tab="logs" onclick="switchTab('logs')">请求日志</div>
-      <div class="tab" data-tab="analytics" onclick="switchTab('analytics')">数据分析</div>
-      <div class="tab" data-tab="redemption" onclick="switchTab('redemption')">兑换码</div>
-      <div class="tab" data-tab="orders" onclick="switchTab('orders')">订单</div>
-      <div class="tab" data-tab="settings" onclick="switchTab('settings')">系统设置</div>
-      <div class="tab" data-tab="audit" onclick="switchTab('audit')">审计</div>
-    </div>
-
     <div id="tab-tokens">
       <div class="card"><div class="card-head"><h3>访问令牌</h3>
         <div style="display:flex;gap:8px">
@@ -207,8 +241,10 @@ tbody tr:last-child td{border-bottom:none}
         <table><thead><tr><th>时间</th><th>操作者</th><th>动作</th><th>对象</th><th>详情</th><th>IP</th></tr></thead><tbody id="auditRows"></tbody></table>
       </div>
     </div>
-  </div>
-</div>
+    </div><!-- /.wrap -->
+  </div><!-- /.main -->
+ </div><!-- /.layout -->
+</div><!-- /#app -->
 
 <div id="modal" class="overlay hidden"><div class="modal" id="modalBox"></div></div>
 <div id="toasts"></div>
@@ -229,7 +265,9 @@ function logout(){localStorage.removeItem('llm_admin_key');$('#loginKey').value=
 async function enterApp(){try{await api('/admin/tokens');}catch(e){return;}$('#login').classList.add('hidden');$('#app').classList.remove('hidden');loadAll();}
 
 const TABS=['tokens','users','channels','pricing','logs','analytics','redemption','orders','settings','audit'];
-function switchTab(n){document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.tab===n));TABS.forEach(x=>$('#tab-'+x).classList.toggle('hidden',x!==n));
+const TAB_TITLES={tokens:'令牌',users:'用户',channels:'渠道',pricing:'定价',logs:'请求日志',analytics:'数据分析',redemption:'兑换码',orders:'订单',settings:'系统设置',audit:'审计'};
+function switchTab(n){document.querySelectorAll('.navm .item').forEach(t=>t.classList.toggle('active',t.dataset.tab===n));TABS.forEach(x=>$('#tab-'+x).classList.toggle('hidden',x!==n));
+  const pt=$('#pageTitle');if(pt)pt.textContent=TAB_TITLES[n]||n;
   if(n==='logs')loadLogs();else if(n==='analytics')loadAnalytics();else if(n==='redemption')loadCodes();else if(n==='orders')loadOrders();else if(n==='settings')loadSettings();else if(n==='audit')loadAudit();}
 function maskKey(k){return k&&k.length>14?k.slice(0,7)+'····'+k.slice(-4):k;}
 function fmtDate(ts){return ts==null?'永久':new Date(ts*1000).toLocaleDateString('zh-CN');}
@@ -599,6 +637,7 @@ async function submitPricing(id){
 async function delPricing(id){if(confirm('确认删除此定价？')){await api('/admin/pricing/'+id,{method:'DELETE'});toast('已删除','ok');loadAll();}}
 
 if(KEY())enterApp();else showLogin('');
+(function(){var t=document.documentElement.getAttribute('data-theme');var b=document.getElementById('themeBtn');if(b)b.textContent=t==='dark'?'☀':'🌙';})();
 </script>
 </body>
 </html>

@@ -21,6 +21,7 @@ from .web.admin_ui import ADMIN_HTML
 from .web.portal_ui import PORTAL_HTML
 from .web.site_docs import docs_html
 from .web.site_home import home_html
+from .web.site_models import models_html
 from .web.site_pricing import pricing_html
 
 
@@ -84,6 +85,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.get("/docs", response_class=HTMLResponse)
     async def docs_page():
         return HTMLResponse(docs_html())
+
+    @app.get("/models", response_class=HTMLResponse)
+    async def models_page():
+        return HTMLResponse(models_html())
 
     @app.get("/pricing", response_class=HTMLResponse)
     async def pricing_page():

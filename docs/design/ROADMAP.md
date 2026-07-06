@@ -134,6 +134,19 @@
 
 ---
 
+## v2.5 — UI 重设计（借鉴 OpenRouter）✅
+
+- [x] 明暗双主题（默认跟随系统 + 记忆）
+- [x] 设计系统重写（克制配色、组件标准化）
+- [x] 首页数据前置（统计条 + logo 墙）
+- [x] 模型目录页 `/models`（搜索/排序/价格/示例）
+- [x] 后台左侧边栏布局
+- [x] `/public/stats` 公开统计端点
+
+> 设计文档：`docs/design/v2.5-UI-REDESIGN.md`
+
+---
+
 ## 进阶储备（P2，按需）
 
 - Rerank（Cohere/Jina）、Midjourney、Suno 等特殊上游
